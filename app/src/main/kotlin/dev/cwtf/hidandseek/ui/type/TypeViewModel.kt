@@ -1,0 +1,276 @@
+package dev.cwtf.hidandseek.ui.type
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dev.cwtf.hidandseek.bluetooth.HidController
+import dev.cwtf.hidandseek.bluetooth.TypeResult
+import dev.cwtf.hidandseek.hid.DrainDecision
+import dev.cwtf.hidandseek.hid.DrainPlan
+import dev.cwtf.hidandseek.hid.EditTrigger
+import dev.cwtf.hidandseek.hid.TransportState
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+enum class SendMode { STAGED, LIVE }
+
+/** Asked when switching into live mode with text already staged. */
+enum class ModeSwitchChoice { SEND_FIRST, KEEP_UNSENT, CLEAR }
+
+class TypeViewModel(private val controller: HidController) : ViewModel() {
+
+    var buffer by mutableStateOf(TextFieldValue())
+        private set
+
+    var mode by mutableStateOf(SendMode.STAGED)
+        private set
+
+    var pendingCount by mutableStateOf(0)
+        private set
+
+    var status by mutableStateOf<String?>(null)
+
+    /** Non-null while a retraction is waiting on the user (SPEC 5.4.2 rule 5). */
+    var overCapPrompt by mutableStateOf<DrainDecision.AskOverCap?>(null)
+        private set
+
+    var modeSwitchPrompt by mutableStateOf(false)
+        private set
+
+    val transportState = controller.transport.state
+    val progress = controller.progress
+
+    private var settleJob: Job? = null
+    private var sendJob: Job? = null
+
+    val isSending: Boolean get() = sendJob?.isActive == true
+
+    // --- editing ------------------------------------------------------------
+
+    fun onBufferChange(value: TextFieldValue) {
+        val previousText = buffer.text
+        buffer = value
+        if (mode == SendMode.LIVE) {
+            handleLiveEdit(previousText, value)
+        }
+    }
+
+    private fun handleLiveEdit(previousText: String, value: TextFieldValue) {
+        val compositionStart = value.composition?.start
+        val decision = controller.drain.onEdit(
+            buffer = value.text,
+            compositionStart = compositionStart,
+            trigger = detectTrigger(previousText, value.text),
+        )
+        applyDecision(decision)
+        refreshPending()
+    }
+
+    /**
+     * Classifies an edit so the flush triggers can fire.
+     *
+     * Only growth at the tail counts as a space/enter trigger; a paste or an
+     * edit elsewhere falls back to the settle delay.
+     */
+    private fun detectTrigger(previous: String, current: String): EditTrigger = when {
+        current.length <= previous.length -> EditTrigger.TYPING
+        current.length - previous.length > 1 -> EditTrigger.PASTE
+        current.lastOrNull() == '\n' -> EditTrigger.ENTER
+        current.lastOrNull() == ' ' -> EditTrigger.SPACE
+        else -> EditTrigger.TYPING
+    }
+
+    private fun applyDecision(decision: DrainDecision) {
+        when (decision) {
+            is DrainDecision.Idle -> Unit
+
+            is DrainDecision.Defer -> {
+                settleJob?.cancel()
+                settleJob = viewModelScope.launch {
+                    delay(decision.afterMs.toLong())
+                    applyDecision(
+                        controller.drain.onSettleElapsed(buffer.text, buffer.composition?.start),
+                    )
+                }
+            }
+
+            is DrainDecision.Execute -> {
+                settleJob?.cancel()
+                execute(decision.plan)
+            }
+
+            is DrainDecision.AskOverCap -> {
+                settleJob?.cancel()
+                overCapPrompt = decision
+            }
+        }
+    }
+
+    private fun execute(plan: DrainPlan) {
+        if (plan is DrainPlan.Idle) return
+        sendJob?.cancel()
+        sendJob = viewModelScope.launch {
+            report(controller.execute(plan))
+            refreshPending()
+        }
+    }
+
+    fun catchUpNow() {
+        applyDecision(controller.drain.onManualFlush(buffer.text, buffer.composition?.start))
+    }
+
+    private fun refreshPending() {
+        pendingCount = if (mode == SendMode.LIVE) {
+            controller.drain.pendingCount(buffer.text, buffer.composition?.start)
+        } else {
+            0
+        }
+    }
+
+    // --- over-cap prompt ----------------------------------------------------
+
+    fun resolveOverCap(retype: Boolean) {
+        val prompt = overCapPrompt ?: return
+        overCapPrompt = null
+        if (retype) {
+            execute(prompt.plan)
+        } else {
+            // Skip and resync: leave the host as it is and stop chasing it.
+            execute(DrainPlan.Resync(controller.drain.sentText + prompt.plan.thenType))
+            status = "Host left out of sync — it keeps what it already had"
+        }
+        refreshPending()
+    }
+
+    // --- mode ---------------------------------------------------------------
+
+    fun requestMode(next: SendMode) {
+        if (next == mode) return
+        if (next == SendMode.LIVE && buffer.text.isNotEmpty()) {
+            modeSwitchPrompt = true
+            return
+        }
+        applyMode(next)
+    }
+
+    fun resolveModeSwitch(choice: ModeSwitchChoice) {
+        modeSwitchPrompt = false
+        when (choice) {
+            ModeSwitchChoice.SEND_FIRST -> {
+                controller.drain.reset()
+                applyMode(SendMode.LIVE)
+                catchUpNow()
+            }
+
+            ModeSwitchChoice.KEEP_UNSENT -> {
+                controller.drain.assumeHostHolds(buffer.text)
+                applyMode(SendMode.LIVE)
+            }
+
+            ModeSwitchChoice.CLEAR -> {
+                buffer = TextFieldValue()
+                controller.drain.reset()
+                applyMode(SendMode.LIVE)
+            }
+        }
+    }
+
+    fun dismissModeSwitch() {
+        modeSwitchPrompt = false
+    }
+
+    /** Named to avoid clashing with the JVM setter generated for [mode]. */
+    private fun applyMode(next: SendMode) {
+        mode = next
+        if (next == SendMode.STAGED) {
+            settleJob?.cancel()
+        } else {
+            controller.drain.reset()
+        }
+        refreshPending()
+    }
+
+    // --- staged send --------------------------------------------------------
+
+    fun send(appendEnter: Boolean = false) {
+        if (isSending) return
+        val text = buffer.text
+        if (text.isEmpty()) return
+        sendJob = viewModelScope.launch {
+            report(controller.typeText(text, appendEnter))
+        }
+    }
+
+    fun cancelSend() {
+        sendJob?.cancel()
+        viewModelScope.launch { controller.releaseAllKeys() }
+        status = "Send stopped"
+    }
+
+    fun clear() {
+        buffer = TextFieldValue()
+        if (mode == SendMode.LIVE) controller.drain.reset()
+        refreshPending()
+    }
+
+    fun releaseAllKeys() {
+        viewModelScope.launch {
+            controller.releaseAllKeys()
+            status = "All keys released"
+        }
+    }
+
+    private fun report(result: TypeResult) {
+        status = when (result) {
+            is TypeResult.Delivered -> when {
+                result.chars == 0 -> null
+                result.skipped > 0 -> "Sent ${result.chars} characters, skipped ${result.skipped}"
+                else -> "Sent ${result.chars} characters"
+            }
+
+            is TypeResult.Partial ->
+                "Stopped after ${result.charsDelivered} characters: ${result.cause.message}"
+
+            is TypeResult.Rejected -> result.cause.message
+        }
+    }
+
+    // --- connection ---------------------------------------------------------
+
+    fun connect(address: String, name: String) {
+        viewModelScope.launch {
+            controller.transport.register()
+            val result = controller.transport.connect(
+                dev.cwtf.hidandseek.hid.HidTarget(address, name),
+            )
+            status = result.fold(
+                onSuccess = { "Connected to $name" },
+                onFailure = { it.message },
+            )
+            if (result.isSuccess) controller.drain.onReconnected(
+                policy = dev.cwtf.hidandseek.hid.ReconnectPolicy.ASK,
+                buffer = buffer.text,
+                compositionStart = buffer.composition?.start,
+            )
+        }
+    }
+
+    fun disconnect() {
+        viewModelScope.launch {
+            controller.transport.disconnect()
+            controller.drain.onDisconnected()
+        }
+    }
+
+    fun registerAsKeyboard() {
+        controller.transport.register().onFailure { status = it.message }
+    }
+
+    fun bondedDevices() = controller.transport.bondedDevices()
+
+    val canSend: Boolean get() = transportState.value == TransportState.CONNECTED
+}

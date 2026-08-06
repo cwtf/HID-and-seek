@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup is off by default (allowBackup=false). If it is ever enabled, API
+    keys and the encrypted store must never leave the device. See SPEC 9.3.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="hid_and_seek_secrets.xml" />
+        <exclude domain="file" path="attachments/" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="hid_and_seek_secrets.xml" />
+    </device-transfer>
+</data-extraction-rules>

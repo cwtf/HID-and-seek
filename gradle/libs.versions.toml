@@ -1,0 +1,60 @@
+[versions]
+# AGP 9.x is required by the material3 1.5.0 alphas below.
+agp = "9.3.1"
+kotlin = "2.4.10"
+coroutines = "1.11.0"
+serialization = "1.11.0"
+
+# Test
+junit = "6.1.2"
+turbine = "1.2.1"
+
+# Android / Compose — used by :app
+composeBom = "2026.06.01"
+# Material 3 Expressive (MaterialExpressiveTheme, MotionScheme, ButtonGroup,
+# SplitButton, LoadingIndicator, FlexibleBottomAppBar, WideNavigationRail) is
+# still internal in 1.4.0 stable, which the BOM pins. The expressive design
+# system is a hard requirement, so material3 is deliberately pulled ahead of
+# the BOM onto the 1.5.0 alpha line. Revisit when 1.5.0 goes stable.
+material3 = "1.5.0-alpha25"
+androidxCore = "1.17.0"
+lifecycle = "2.9.4"
+activityCompose = "1.11.0"
+navigation = "2.9.6"
+room = "2.8.4"
+hilt = "2.60.1"
+datastore = "1.1.7"
+okhttp = "5.2.1"
+securityCrypto = "1.1.0"
+
+[libraries]
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
+
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
+compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit" }
+turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
