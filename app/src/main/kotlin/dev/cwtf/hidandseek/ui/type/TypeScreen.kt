@@ -63,6 +63,14 @@ fun TypeScreen(
 
     var showMacros by remember { mutableStateOf(false) }
     var showSendMenu by remember { mutableStateOf(false) }
+    var showSnippets by remember { mutableStateOf(false) }
+    var showBroadcast by remember { mutableStateOf(false) }
+    var showAddDevice by remember { mutableStateOf(false) }
+
+    val snippets by viewModel.snippets.collectAsState()
+
+    // A staged password should not land in a screenshot or the recents preview.
+    SecureWhile(active = viewModel.bufferIsSensitive)
 
     Column(
         modifier = modifier
@@ -165,9 +173,53 @@ fun TypeScreen(
                     onSendClipboard = {
                         viewModel.sendClipboard(clipboard.getText()?.text)
                     },
+                    onShowSnippets = { showSnippets = true },
+                    onShowBroadcast = { showBroadcast = true },
+                    onShowAddDevice = { showAddDevice = true },
                 )
             }
         }
+    }
+
+    if (showSnippets) {
+        SnippetSheet(
+            snippets = snippets,
+            sheetState = rememberModalBottomSheetState(),
+            canSave = viewModel.buffer.text.isNotEmpty(),
+            onDismiss = { showSnippets = false },
+            onLoad = {
+                viewModel.loadSnippet(it)
+                showSnippets = false
+            },
+            onSave = viewModel::saveSnippet,
+            onDelete = viewModel::deleteSnippet,
+        )
+    }
+
+    if (showBroadcast) {
+        BroadcastSheet(
+            devices = viewModel.pickerDevices(),
+            state = viewModel.broadcast,
+            sheetState = rememberModalBottomSheetState(),
+            onDismiss = {
+                showBroadcast = false
+                viewModel.dismissBroadcast()
+            },
+            onStart = viewModel::startBroadcast,
+            onAbort = viewModel::abortBroadcast,
+        )
+    }
+
+    if (showAddDevice) {
+        AddDeviceSheet(
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            knownAddresses = viewModel.knownAddresses,
+            bondedDevices = viewModel::bondedDevices,
+            onDismiss = { showAddDevice = false },
+            onAdopt = viewModel::adoptAndConnect,
+            onTestTyping = viewModel::testTyping,
+            testResult = viewModel.status,
+        )
     }
 
     if (showMacros) {
@@ -270,6 +322,9 @@ private fun SendOptionsMenu(
     connected: Boolean,
     onDismiss: () -> Unit,
     onSendClipboard: () -> Unit,
+    onShowSnippets: () -> Unit,
+    onShowBroadcast: () -> Unit,
+    onShowAddDevice: () -> Unit,
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
@@ -287,6 +342,27 @@ private fun SendOptionsMenu(
             enabled = connected,
             onClick = {
                 onSendClipboard()
+                onDismiss()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Snippets") },
+            onClick = {
+                onShowSnippets()
+                onDismiss()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Send to several devices…") },
+            onClick = {
+                onShowBroadcast()
+                onDismiss()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Add a device…") },
+            onClick = {
+                onShowAddDevice()
                 onDismiss()
             },
         )
@@ -358,6 +434,29 @@ private fun PreviewSheet(
                     enabled = canSend,
                 ) { Text("Send") }
                 TextButton(onClick = onDismiss) { Text("Back") }
+            }
+        }
+    }
+}
+
+/**
+ * Blocks screenshots and the recents thumbnail while [active].
+ *
+ * Applied when a sensitive snippet is staged: the text is on screen precisely
+ * because it is about to be typed somewhere, which is the worst moment for it
+ * to be captured.
+ */
+@Composable
+private fun SecureWhile(active: Boolean) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(active) {
+        val window = (view.context as? android.app.Activity)?.window
+        if (active) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        onDispose {
+            if (active) {
+                window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
             }
         }
     }

@@ -564,7 +564,9 @@ into the roster without re-pairing.
 - Backed by `TextFieldState`; survives process death via `SavedStateHandle` + debounced (500 ms)
   DataStore autosave.
 - **Snippets**: save the buffer under a name; snippet list in the Type overflow. Snippets marked
-  *sensitive* are stored encrypted and never appear in previews, exports, or logs.
+  *sensitive* keep their text in the encrypted store rather than the settings file, never appear
+  in previews, exports, or logs, and apply `FLAG_SECURE` while loaded — the text is on screen
+  precisely because it is about to be typed somewhere, which is the worst moment to be captured.
 
 #### 5.3.2 Preview
 Bottom sheet showing the keystroke sequence grouped per line, unmappable characters highlighted

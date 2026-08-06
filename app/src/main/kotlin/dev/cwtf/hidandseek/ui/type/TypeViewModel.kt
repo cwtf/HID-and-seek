@@ -3,15 +3,22 @@ package dev.cwtf.hidandseek.ui.type
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.cwtf.hidandseek.AppContainer
+import dev.cwtf.hidandseek.data.Snippet
+import dev.cwtf.hidandseek.data.Snippets
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import dev.cwtf.hidandseek.bluetooth.HidController
 import dev.cwtf.hidandseek.bluetooth.SendPreview
 import dev.cwtf.hidandseek.bluetooth.TypeResult
 import dev.cwtf.hidandseek.hid.Modifiers
 import dev.cwtf.hidandseek.data.DeviceRecord
+import dev.cwtf.hidandseek.data.HostOsTag
 import dev.cwtf.hidandseek.hid.HidTarget
 import dev.cwtf.hidandseek.hid.ReconnectPolicy
 import dev.cwtf.hidandseek.hid.DrainDecision
@@ -23,6 +30,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class SendMode { STAGED, LIVE }
+
+data class BroadcastResult(val address: String, val name: String, val status: String)
+
+data class BroadcastState(
+    val results: List<BroadcastResult>,
+    val aborted: Boolean = false,
+    val finished: Boolean = false,
+)
 
 /** Asked when switching into live mode with text already staged. */
 enum class ModeSwitchChoice { SEND_FIRST, KEEP_UNSENT, CLEAR }
@@ -298,6 +313,120 @@ class TypeViewModel(private val container: AppContainer) : ViewModel() {
         sendJob = viewModelScope.launch { report(controller.pressConsumerKey(usage)) }
     }
 
+    // --- snippets -----------------------------------------------------------
+
+    val snippets: StateFlow<Snippets> = container.snippetRepository.snippets
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), Snippets())
+
+    /**
+     * True while the buffer holds text from a snippet marked sensitive.
+     *
+     * Drives FLAG_SECURE, so a password staged for typing does not end up in a
+     * screenshot or the recents thumbnail.
+     */
+    var bufferIsSensitive by mutableStateOf(false)
+        private set
+
+    fun saveSnippet(name: String, sensitive: Boolean) {
+        val content = buffer.text
+        if (content.isEmpty() || name.isBlank()) return
+        viewModelScope.launch {
+            container.snippetRepository.save(name.trim(), content, sensitive)
+            status = "Saved snippet \"$name\""
+        }
+    }
+
+    fun loadSnippet(snippet: Snippet) {
+        val content = container.snippetRepository.contentOf(snippet)
+        buffer = TextFieldValue(content, selection = TextRange(content.length))
+        bufferIsSensitive = snippet.sensitive
+        if (mode == SendMode.LIVE) controller.drain.reset()
+        refreshPending()
+    }
+
+    fun deleteSnippet(id: String) {
+        viewModelScope.launch { container.snippetRepository.delete(id) }
+    }
+
+    // --- broadcast send -----------------------------------------------------
+
+    var broadcast by mutableStateOf<BroadcastState?>(null)
+        private set
+
+    private var broadcastJob: Job? = null
+
+    /**
+     * Sends the buffer to several devices, one after another.
+     *
+     * Sequential by necessity, not by choice: the platform holds one HID
+     * connection at a time, so each device is connected, typed into, and
+     * dropped before the next.
+     */
+    fun startBroadcast(devices: List<DeviceRecord>) {
+        if (devices.isEmpty() || isSending) return
+        val text = prepared(buffer.text)
+        if (text.isEmpty()) return
+
+        broadcastJob = viewModelScope.launch {
+            broadcast = BroadcastState(
+                results = devices.map { BroadcastResult(it.address, it.displayName, "Waiting") },
+            )
+
+            for ((index, device) in devices.withIndex()) {
+                if (broadcast?.aborted == true) {
+                    updateBroadcast(index) { it.copy(status = "Skipped") }
+                    continue
+                }
+
+                updateBroadcast(index) { it.copy(status = "Connecting…") }
+                val connected = controller.transport
+                    .connect(HidTarget(device.address, device.name))
+
+                if (connected.isFailure) {
+                    updateBroadcast(index) {
+                        it.copy(status = connected.exceptionOrNull()?.message ?: "Could not connect")
+                    }
+                    continue
+                }
+
+                controller.activeAddress.value = device.address
+                updateBroadcast(index) { it.copy(status = "Typing…") }
+
+                val result = controller.typeText(text, appendEnter)
+                updateBroadcast(index) {
+                    it.copy(
+                        status = when (result) {
+                            is TypeResult.Delivered -> "Sent ${result.chars} characters"
+                            is TypeResult.Partial -> "Stopped at ${result.charsDelivered}"
+                            is TypeResult.Rejected -> result.cause.message ?: "Failed"
+                        },
+                    )
+                }
+                controller.transport.disconnect()
+            }
+
+            broadcast = broadcast?.copy(finished = true)
+        }
+    }
+
+    private fun updateBroadcast(index: Int, transform: (BroadcastResult) -> BroadcastResult) {
+        broadcast = broadcast?.let { state ->
+            state.copy(
+                results = state.results.toMutableList().apply { this[index] = transform(this[index]) },
+            )
+        }
+    }
+
+    /** Stops after the device currently being typed into, not mid-send. */
+    fun abortBroadcast() {
+        broadcast = broadcast?.copy(aborted = true)
+    }
+
+    fun dismissBroadcast() {
+        broadcastJob?.cancel()
+        broadcast = null
+    }
+
     // --- live-mode watermark ------------------------------------------------
 
     /**
@@ -324,6 +453,7 @@ class TypeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun clear() {
         buffer = TextFieldValue()
+        bufferIsSensitive = false
         if (mode == SendMode.LIVE) controller.drain.reset()
         refreshPending()
     }
@@ -401,6 +531,34 @@ class TypeViewModel(private val container: AppContainer) : ViewModel() {
             controller.activeAddress.value = null
         }
     }
+
+    /** Adopts a newly paired host and connects to it. */
+    fun adoptAndConnect(target: HidTarget, hostOs: HostOsTag, nickname: String?, layoutId: String) {
+        viewModelScope.launch {
+            container.deviceRosterRepository.upsert(
+                DeviceRecord(
+                    address = target.address,
+                    name = target.name,
+                    nickname = nickname,
+                    layoutId = layoutId,
+                    hostOs = hostOs,
+                ),
+            )
+            connect(target.address, target.name)
+        }
+    }
+
+    /** Types a sample so the configured layout can be checked at a glance. */
+    fun testTyping() {
+        viewModelScope.launch {
+            report(controller.typeText("HID & Seek test 123"))
+        }
+    }
+
+    fun bondedDevices(): List<HidTarget> = controller.transport.bondedDevices()
+
+    val knownAddresses: Set<String>
+        get() = container.roster.value.devices.map { it.address }.toSet()
 
     /** Known devices first, then anything paired that is not in the roster yet. */
     fun pickerDevices(): List<DeviceRecord> {

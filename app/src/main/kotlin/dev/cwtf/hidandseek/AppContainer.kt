@@ -11,6 +11,7 @@ import dev.cwtf.hidandseek.data.DeviceRoster
 import dev.cwtf.hidandseek.data.DeviceRosterRepository
 import dev.cwtf.hidandseek.data.SettingsRepository
 import dev.cwtf.hidandseek.data.SettingsResolver
+import dev.cwtf.hidandseek.data.SnippetRepository
 import dev.cwtf.hidandseek.data.chat.ChatRepository
 import dev.cwtf.hidandseek.data.chat.ImageProcessor
 import dev.cwtf.hidandseek.data.chat.TextRecognizer
@@ -42,6 +43,7 @@ class AppContainer(context: Context) {
     val hidController = HidController(context)
 
     val secretStore = SecretStore(context)
+    val snippetRepository = SnippetRepository(context, scope, secretStore)
     val llmProviderRepository = LlmProviderRepository(context, scope, secretStore)
     val llmClient = LlmClient()
     val chatRepository = ChatRepository(context)

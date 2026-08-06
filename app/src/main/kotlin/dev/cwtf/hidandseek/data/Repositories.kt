@@ -7,6 +7,7 @@ import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.Serializer
 import androidx.datastore.dataStoreFile
 import dev.cwtf.hidandseek.data.agent.AgentSettings
+import dev.cwtf.hidandseek.data.llm.SecretStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.KSerializer
@@ -86,6 +87,60 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
     suspend fun resetTyping() = update { it.copy(typing = TypingSettings()) }
 
     suspend fun resetLive() = update { it.copy(live = LiveSettings()) }
+}
+
+/**
+ * Saved buffers.
+ *
+ * Sensitive content is routed to [SecretStore] and never touches this store's
+ * JSON file, so a snippet holding a password is not sitting in plain text next
+ * to the theme setting.
+ */
+class SnippetRepository(
+    context: Context,
+    scope: CoroutineScope,
+    private val secrets: SecretStore,
+) {
+
+    private val store: DataStore<Snippets> =
+        createStore(context, "snippets.json", Snippets(), scope)
+
+    val snippets: Flow<Snippets> = store.data
+
+    /** The text of [snippet], resolved from the encrypted store when sensitive. */
+    fun contentOf(snippet: Snippet): String =
+        if (snippet.sensitive) secrets.get(snippet.secretAlias).orEmpty() else snippet.content
+
+    suspend fun save(name: String, content: String, sensitive: Boolean): Snippet {
+        val snippet = Snippet(
+            name = name,
+            content = if (sensitive) "" else content,
+            sensitive = sensitive,
+        )
+        if (sensitive) secrets.put(snippet.secretAlias, content)
+        store.updateData { it.upsert(snippet) }
+        return snippet
+    }
+
+    suspend fun rename(id: String, name: String) {
+        store.updateData { current ->
+            current.find(id)?.let { current.upsert(it.copy(name = name)) } ?: current
+        }
+    }
+
+    suspend fun delete(id: String) {
+        store.updateData { current ->
+            current.find(id)?.let { if (it.sensitive) secrets.remove(it.secretAlias) }
+            current.remove(id)
+        }
+    }
+
+    suspend fun deleteAll() {
+        store.updateData { current ->
+            current.items.filter { it.sensitive }.forEach { secrets.remove(it.secretAlias) }
+            Snippets()
+        }
+    }
 }
 
 class DeviceRosterRepository(context: Context, scope: CoroutineScope) {
