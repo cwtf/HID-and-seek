@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -165,7 +166,11 @@ fun HidAndSeekApp(
         },
     ) {
         Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = Modifier
+            .nestedScroll(scrollBehavior.nestedScrollConnection)
+            // Edge-to-edge windows do not resize Compose content automatically.
+            // Keep the active screen and its bottom controls above the keyboard.
+            .imePadding(),
         topBar = {
             LargeFlexibleTopAppBar(
                 title = {

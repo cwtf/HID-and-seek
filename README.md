@@ -4,6 +4,7 @@ Turn your Android phone into a **Bluetooth keyboard for other devices** — PCs,
 
 ## Features
 
+- **Text-file import** — load a config, script, or other text file into the staging buffer and type it over HID.
 - **Staged typing** — compose a block of text and fire it at the host in one go.
 - **Live typing** — stream every settled edit to the host as you type.
 - **LLM chat tab** — talk to a model (OpenRouter, DeepSeek, OpenAI, or any OpenAI-compatible endpoint), then send its answer — or a single code block — to the host as keystrokes. Optionally let the agent type directly.

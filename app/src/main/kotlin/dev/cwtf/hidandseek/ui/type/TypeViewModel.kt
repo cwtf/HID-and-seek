@@ -1,5 +1,6 @@
 package dev.cwtf.hidandseek.ui.type
 
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -10,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import dev.cwtf.hidandseek.AppContainer
 import dev.cwtf.hidandseek.data.Snippet
 import dev.cwtf.hidandseek.data.Snippets
+import dev.cwtf.hidandseek.data.TextFileImportException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -47,6 +49,9 @@ class TypeViewModel(private val container: AppContainer) : ViewModel() {
     private val controller: HidController = container.hidController
 
     var buffer by mutableStateOf(TextFieldValue())
+        private set
+
+    var attachedFileName by mutableStateOf<String?>(null)
         private set
 
     var mode by mutableStateOf(SendMode.STAGED)
@@ -196,6 +201,7 @@ class TypeViewModel(private val container: AppContainer) : ViewModel() {
 
             ModeSwitchChoice.CLEAR -> {
                 buffer = TextFieldValue()
+                attachedFileName = null
                 controller.drain.reset()
                 applyMode(SendMode.LIVE)
             }
@@ -339,6 +345,7 @@ class TypeViewModel(private val container: AppContainer) : ViewModel() {
     fun loadSnippet(snippet: Snippet) {
         val content = container.snippetRepository.contentOf(snippet)
         buffer = TextFieldValue(content, selection = TextRange(content.length))
+        attachedFileName = null
         bufferIsSensitive = snippet.sensitive
         if (mode == SendMode.LIVE) controller.drain.reset()
         refreshPending()
@@ -346,6 +353,35 @@ class TypeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun deleteSnippet(id: String) {
         viewModelScope.launch { container.snippetRepository.delete(id) }
+    }
+
+    // --- text-file import ---------------------------------------------------
+
+    fun attachFile(uri: Uri) {
+        if (isSending) return
+        viewModelScope.launch {
+            status = "Loading file..."
+            container.textFileReader.read(uri).fold(
+                onSuccess = { file ->
+                    buffer = TextFieldValue(
+                        file.text,
+                        selection = TextRange(file.text.length),
+                    )
+                    attachedFileName = file.name
+                    bufferIsSensitive = false
+                    if (mode == SendMode.LIVE) controller.drain.reset()
+                    refreshPending()
+                    status = "Loaded \"${file.name}\" (${file.text.length} characters)"
+                },
+                onFailure = { error ->
+                    status = if (error is TextFileImportException) {
+                        error.message
+                    } else {
+                        "Could not read that file"
+                    }
+                },
+            )
+        }
     }
 
     // --- broadcast send -----------------------------------------------------
@@ -453,6 +489,7 @@ class TypeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun clear() {
         buffer = TextFieldValue()
+        attachedFileName = null
         bufferIsSensitive = false
         if (mode == SendMode.LIVE) controller.drain.reset()
         refreshPending()

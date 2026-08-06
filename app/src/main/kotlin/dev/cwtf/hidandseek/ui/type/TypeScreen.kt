@@ -1,5 +1,7 @@
 package dev.cwtf.hidandseek.ui.type
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +56,16 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.cwtf.hidandseek.hid.TransportState
 
+private val TEXT_FILE_MIME_TYPES = arrayOf(
+    "text/*",
+    "application/json",
+    "application/xml",
+    "application/yaml",
+    "application/toml",
+    "application/javascript",
+    "application/octet-stream",
+)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun TypeScreen(
@@ -64,6 +76,11 @@ fun TypeScreen(
     val progress by viewModel.progress.collectAsState()
     val connected = transportState == TransportState.CONNECTED
     val clipboard = LocalClipboardManager.current
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        uri?.let(viewModel::attachFile)
+    }
 
     var showMacros by remember { mutableStateOf(false) }
     var showSendMenu by remember { mutableStateOf(false) }
@@ -100,6 +117,7 @@ fun TypeScreen(
         Text(
             text = buildString {
                 append("${viewModel.buffer.text.length} chars")
+                viewModel.attachedFileName?.let { append(" from $it") }
                 if (viewModel.mode == SendMode.LIVE) {
                     append(" · ${viewModel.pendingCount} pending")
                 }
@@ -198,6 +216,7 @@ fun TypeScreen(
                         onSendClipboard = {
                             viewModel.sendClipboard(clipboard.getText()?.text)
                         },
+                        onAttachFile = { filePicker.launch(TEXT_FILE_MIME_TYPES) },
                         onShowSnippets = { showSnippets = true },
                         onShowBroadcast = { showBroadcast = true },
                         onShowAddDevice = { showAddDevice = true },
@@ -348,6 +367,7 @@ private fun SendOptionsMenu(
     connected: Boolean,
     onDismiss: () -> Unit,
     onSendClipboard: () -> Unit,
+    onAttachFile: () -> Unit,
     onShowSnippets: () -> Unit,
     onShowBroadcast: () -> Unit,
     onShowAddDevice: () -> Unit,
@@ -368,6 +388,13 @@ private fun SendOptionsMenu(
             enabled = connected,
             onClick = {
                 onSendClipboard()
+                onDismiss()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Attach text file") },
+            onClick = {
+                onAttachFile()
                 onDismiss()
             },
         )

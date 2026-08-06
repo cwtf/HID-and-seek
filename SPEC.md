@@ -45,7 +45,8 @@ Two things make it more than a remote keyboard:
 - No USB HID gadget mode (requires root/custom kernel — see §3.2).
 - No file transfer, clipboard sync, or screen mirroring.
 - No on-device LLM inference.
-- No non-image attachments (PDFs, documents, audio) — images only (§6.2.3).
+- No non-image LLM chat attachments (PDFs, documents, audio) — images only (§6.2.3).
+  The Type screen may import decoded text files into its staging buffer (§5.3.1).
 - No Play Store distribution in v1 — sideload / self-signed APK (§2.2).
 
 ### 1.3 Platform constraint on concurrent connections
@@ -454,6 +455,7 @@ un-sent, or clear it?*
 | Send line by line | Type one line, wait for a tap, continue (interactive prompts) |
 | Send to all devices… | Sequential broadcast (§5.3.4) |
 | Send clipboard | Type clipboard content instead of the buffer |
+| Attach text file | Load a text document into the staged buffer for preview and sending |
 
 **During a send** the bottom bar container-transforms into a progress bar with a prominent
 **Stop**, and the text area becomes read-only with a highlight tracking the current position.
@@ -567,6 +569,10 @@ into the roster without re-pairing.
   *sensitive* keep their text in the encrypted store rather than the settings file, never appear
   in previews, exports, or logs, and apply `FLAG_SECURE` while loaded — the text is on screen
   precisely because it is about to be typed somewhere, which is the worst moment to be captured.
+
+- **Text-file import**: the system document picker loads UTF-8 or BOM-marked UTF-16 into the
+  staged buffer. Imports are limited to 256 KiB and binary control data is rejected. The source
+  file is not copied, retained, or transferred; only its decoded text is emitted as HID keys.
 
 #### 5.3.2 Preview
 Bottom sheet showing the keystroke sequence grouped per line, unmappable characters highlighted
