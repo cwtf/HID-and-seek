@@ -37,9 +37,9 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -172,80 +172,84 @@ fun HidAndSeekApp(
             // Keep the active screen and its bottom controls above the keyboard.
             .imePadding(),
         topBar = {
-            LargeFlexibleTopAppBar(
-                title = {
-                    Text(
-                        when {
-                            inSettings -> SettingsRoutes.titleFor(route)
-                            route == ROUTE_CHAT -> "Chat"
-                            else -> "Type"
-                        },
-                    )
-                },
-                subtitle = {
-                    if (!inSettings) {
+            Column {
+                LargeFlexibleTopAppBar(
+                    title = {
                         Text(
-                            when (transportState) {
-                                TransportState.CONNECTED -> "Connected to a device"
-                                TransportState.CONNECTING -> "Connecting…"
-                                TransportState.REGISTERED -> "Ready to pair"
-                                else -> "No device connected"
+                            when {
+                                inSettings -> SettingsRoutes.titleFor(route)
+                                route == ROUTE_CHAT -> "Chat"
+                                else -> "Type"
                             },
                         )
-                    }
-                },
-                scrollBehavior = scrollBehavior,
-                navigationIcon = {
-                    when {
-                        inSettings -> IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                    },
+                    subtitle = {
+                        if (!inSettings) {
+                            Text(
+                                when (transportState) {
+                                    TransportState.CONNECTED -> "Connected to a device"
+                                    TransportState.CONNECTING -> "Connecting…"
+                                    TransportState.REGISTERED -> "Ready to pair"
+                                    else -> "No device connected"
+                                },
                             )
                         }
+                    },
+                    scrollBehavior = scrollBehavior,
+                    navigationIcon = {
+                        when {
+                            inSettings -> IconButton(
+                                onClick = { navController.popBackStack() },
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back",
+                                )
+                            }
 
-                        route == ROUTE_CHAT -> IconButton(
-                            onClick = { scope.launch { drawerState.open() } },
-                        ) {
-                            Icon(Icons.Default.Menu, contentDescription = "Conversations")
+                            route == ROUTE_CHAT -> IconButton(
+                                onClick = { scope.launch { drawerState.open() } },
+                            ) {
+                                Icon(Icons.Default.Menu, contentDescription = "Conversations")
+                            }
                         }
+                    },
+                    actions = {
+                        if (!inSettings) {
+                            ConnectionChip(state = transportState) {
+                                permissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.BLUETOOTH_CONNECT,
+                                        Manifest.permission.BLUETOOTH_SCAN,
+                                        Manifest.permission.BLUETOOTH_ADVERTISE,
+                                    ),
+                                )
+                            }
+                            IconButton(
+                                onClick = { navController.navigate(SettingsRoutes.ROOT) },
+                            ) {
+                                Icon(Icons.Default.Settings, contentDescription = "Settings")
+                            }
+                        }
+                    },
+                )
+
+                // Settings owns the whole screen, and wider windows use the rail instead.
+                if (!inSettings && !wideLayout) {
+                    PrimaryTabRow(
+                        selectedTabIndex = if (route == ROUTE_CHAT) 1 else 0,
+                    ) {
+                        Tab(
+                            selected = route == ROUTE_TYPE,
+                            onClick = { navController.navigateToTab(ROUTE_TYPE) },
+                            text = { Text("Type") },
+                        )
+                        Tab(
+                            selected = route == ROUTE_CHAT,
+                            onClick = { navController.navigateToTab(ROUTE_CHAT) },
+                            text = { Text("Chat") },
+                        )
                     }
-                },
-                actions = {
-                    if (!inSettings) {
-                        ConnectionChip(state = transportState) {
-                            permissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.BLUETOOTH_CONNECT,
-                                    Manifest.permission.BLUETOOTH_SCAN,
-                                    Manifest.permission.BLUETOOTH_ADVERTISE,
-                                ),
-                            )
-                        }
-                        IconButton(onClick = { navController.navigate(SettingsRoutes.ROOT) }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings")
-                        }
-                    }
-                },
-            )
-        },
-        bottomBar = {
-            // Settings is a full-screen destination and never appears as a tab.
-            // On wide screens the destinations move to a side rail instead.
-            if (!inSettings && !wideLayout) {
-                NavigationBar {
-                    NavigationBarItem(
-                        selected = route == ROUTE_TYPE,
-                        onClick = { navController.navigateToTab(ROUTE_TYPE) },
-                        icon = { Icon(Icons.Default.Keyboard, contentDescription = null) },
-                        label = { Text("Type") },
-                    )
-                    NavigationBarItem(
-                        selected = route == ROUTE_CHAT,
-                        onClick = { navController.navigateToTab(ROUTE_CHAT) },
-                        icon = { Icon(Icons.Outlined.Chat, contentDescription = null) },
-                        label = { Text("Chat") },
-                    )
                 }
             }
         },

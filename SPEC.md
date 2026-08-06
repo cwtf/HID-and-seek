@@ -338,6 +338,7 @@ accumulation, so a slow Bluetooth write doesn't compound into progressive drift 
   - `SplitButton` — "Send ▾"
   - `FloatingActionButtonMenu` — device picker's add actions
   - `LoadingIndicator` (shape-morphing) — connecting, LLM streaming
+  - `PrimaryTabRow` — phone Type/Chat navigation below the top app bar
   - `WideNavigationRail` — tablets/foldables
   - `ToggleButton` groups — typing profiles
   - Expressive `Slider` with ticks and value label — delay tuning
@@ -505,7 +506,7 @@ Reached from the gear icon or the picker's "Manage devices".
 
 | Window class | Layout |
 |---|---|
-| Compact | Bottom navigation bar (2 destinations) |
+| Compact | `PrimaryTabRow` below the top app bar (2 destinations) |
 | Medium | `WideNavigationRail`, collapsed |
 | Expanded | Rail expanded; Chat uses two-pane conversation list/detail; Type shows the preview pane side-by-side; the device picker renders as a side sheet rather than a bottom sheet |
 
