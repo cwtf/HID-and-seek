@@ -46,6 +46,7 @@ data class TypingSettings(
     val modifierSettleMs: Int = 5,
     val newlineExtraDelayMs: Int = 40,
     val deadKeyExtraDelayMs: Int = 25,
+    val repeatedKeyExtraDelayMs: Int = 30,
     val humanize: Boolean = false,
 
     val defaultLayoutId: String = "us",

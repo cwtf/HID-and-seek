@@ -48,6 +48,7 @@ object SettingsResolver {
             modifierSettleMs = typing.modifierSettleMs,
             newlineExtraDelayMs = typing.newlineExtraDelayMs,
             deadKeyExtraDelayMs = typing.deadKeyExtraDelayMs,
+            repeatedKeyExtraDelayMs = typing.repeatedKeyExtraDelayMs,
             humanize = typing.humanize,
         )
     }

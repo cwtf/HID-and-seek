@@ -53,6 +53,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                     modifierSettleMs = preset.modifierSettleMs,
                     newlineExtraDelayMs = preset.newlineExtraDelayMs,
                     deadKeyExtraDelayMs = preset.deadKeyExtraDelayMs,
+                    repeatedKeyExtraDelayMs = preset.repeatedKeyExtraDelayMs,
                 )
             }
         }

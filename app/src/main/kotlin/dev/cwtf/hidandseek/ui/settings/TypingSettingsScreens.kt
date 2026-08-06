@@ -84,6 +84,19 @@ fun TypingSettingsScreen(viewModel: SettingsViewModel, modifier: Modifier = Modi
                 onReset = { viewModel.updateTyping { it.copy(newlineExtraDelayMs = 40) } },
             )
             SettingsSlider(
+                title = "Extra delay before a repeated key",
+                value = typing.repeatedKeyExtraDelayMs,
+                range = 0..300,
+                valueLabel = { "$it ms" },
+                helper = "Pressing the same key twice in a row needs a clear gap, or the " +
+                    "device treats the second press as key-repeat and drops it — \"ssss\" " +
+                    "arrives as \"ss\". Raise this if repeated letters go missing.",
+                onValueChange = { v ->
+                    viewModel.updateTyping { it.copy(repeatedKeyExtraDelayMs = v) }
+                },
+                onReset = { viewModel.updateTyping { it.copy(repeatedKeyExtraDelayMs = 30) } },
+            )
+            SettingsSlider(
                 title = "Extra delay after dead key",
                 value = typing.deadKeyExtraDelayMs,
                 range = 0..200,

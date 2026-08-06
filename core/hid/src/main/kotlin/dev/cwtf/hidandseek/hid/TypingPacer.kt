@@ -36,10 +36,16 @@ object ReportScheduler {
         val effectiveJitter = if (profile.humanize) jitter else Jitter.NONE
 
         strokes.forEachIndexed { index, stroke ->
-            val gap = if (index == 0) {
+            val previous = strokes.getOrNull(index - 1)
+            val gap = if (previous == null) {
                 0
             } else {
-                effectiveJitter.apply(profile.interKeyDelayMs) + extraAfter(strokes[index - 1], profile)
+                effectiveJitter.apply(profile.interKeyDelayMs) +
+                    extraAfter(previous, profile) +
+                    // Pressing the same key again needs a clear gap, or the
+                    // host treats the second press as key-repeat noise and
+                    // drops it — turning "ssss" into "ss".
+                    if (previous.usage == stroke.usage) profile.repeatedKeyExtraDelayMs else 0
             }
 
             // Assert modifiers on their own first so the host sees them before

@@ -24,6 +24,19 @@ data class TypingProfile(
     val newlineExtraDelayMs: Int = 40,
     /** Extra pause after a dead key so host compose logic keeps up. */
     val deadKeyExtraDelayMs: Int = 25,
+    /**
+     * Extra pause before pressing the *same* key again.
+     *
+     * Hosts distinguish a repeated character from a held key by the gap between
+     * release and the next press. Too short and the second press is swallowed
+     * as key-repeat noise, so `ssss` arrives as `ss` — losing exactly the
+     * duplicates while ordinary text is unaffected.
+     *
+     * This is a separate dial from [interKeyDelayMs] because the two problems
+     * are different: raising the general delay to fix repeats would slow down
+     * every send for the sake of a minority of characters.
+     */
+    val repeatedKeyExtraDelayMs: Int = 30,
     val humanize: Boolean = false,
 ) {
 
@@ -33,6 +46,7 @@ data class TypingProfile(
         require(modifierSettleMs in 0..50) { "modifierSettleMs out of range: $modifierSettleMs" }
         require(newlineExtraDelayMs in 0..500) { "newlineExtraDelayMs out of range" }
         require(deadKeyExtraDelayMs in 0..200) { "deadKeyExtraDelayMs out of range" }
+        require(repeatedKeyExtraDelayMs in 0..300) { "repeatedKeyExtraDelayMs out of range" }
     }
 
     /** Rough characters per second, for the settings screen's live readout. */
@@ -49,6 +63,7 @@ data class TypingProfile(
             interKeyDelayMs = 5,
             keyHoldMs = 5,
             newlineExtraDelayMs = 20,
+            repeatedKeyExtraDelayMs = 20,
         )
 
         val NORMAL = TypingProfile(id = "normal", displayName = "Normal")
@@ -60,6 +75,7 @@ data class TypingProfile(
             keyHoldMs = 15,
             modifierSettleMs = 10,
             newlineExtraDelayMs = 100,
+            repeatedKeyExtraDelayMs = 60,
         )
 
         val BIOS = TypingProfile(
@@ -70,6 +86,7 @@ data class TypingProfile(
             modifierSettleMs = 15,
             newlineExtraDelayMs = 120,
             deadKeyExtraDelayMs = 60,
+            repeatedKeyExtraDelayMs = 100,
         )
 
         val PRESETS = listOf(FAST, NORMAL, SAFE, BIOS)

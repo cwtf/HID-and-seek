@@ -109,7 +109,9 @@ class ReportSchedulerTest {
 
     @Test
     fun `humanize is ignored unless the profile enables it`() {
-        val strokes = mapper.map("aaaaaaaa").strokes
+        // Distinct characters on purpose: a repeated key carries an extra gap,
+        // which would mask what this test is measuring.
+        val strokes = mapper.map("abcdefgh").strokes
         val alwaysZero = Jitter { 0 }
 
         val plain = ReportScheduler.schedule(strokes, TypingProfile.NORMAL, alwaysZero)
@@ -125,7 +127,7 @@ class ReportSchedulerTest {
 
     @Test
     fun `duration estimate scales with the profile`() {
-        val strokes = mapper.map("a".repeat(100)).strokes
+        val strokes = mapper.map("abcdefghij".repeat(10)).strokes
         val fast = ReportScheduler.estimateDurationMs(strokes, TypingProfile.FAST)
         val bios = ReportScheduler.estimateDurationMs(strokes, TypingProfile.BIOS)
         assertTrue(bios > fast * 3, "BIOS profile should be dramatically slower")
