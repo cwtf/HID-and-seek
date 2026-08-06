@@ -25,19 +25,42 @@ Turn your Android phone into a **Bluetooth keyboard for other devices** — PCs,
 - Android 12 (API 31) or higher
 - A host with Bluetooth keyboard (HID) support
 
-## Building
+## Installation
 
-Requires JDK 17+ and the Android SDK.
+HID & Seek is distributed as a sideloaded APK and is not available on Google Play.
+
+### Install a packaged APK
+
+1. Download `app-release.apk` from the project's [GitHub Releases](https://github.com/cwtf/HID-and-seek/releases) page. If no release is listed, use the build-from-source instructions below.
+2. Open the APK from your Android browser, Downloads app, or file manager.
+3. If Android asks, allow **Install unknown apps** for the app that opened the APK.
+4. Tap **Install**, then open HID & Seek and grant the requested **Nearby devices** permission.
+
+Only install APKs downloaded from this repository. To install a downloaded APK from a computer with [ADB](https://developer.android.com/tools/adb), connect the phone and run:
 
 ```bash
-./gradlew assembleDebug
+adb install -r app-release.apk
 ```
 
-The app is distributed as a sideloaded / self-signed APK — there is no Play Store release.
+After installation, start pairing from the receiving device's Bluetooth settings. The phone advertises itself as a keyboard named **HID & Seek**.
+
+## Build from source
+
+Requires JDK 17+ and an Android SDK with API 36.
+
+```bash
+./gradlew :app:assembleDebug
+```
+
+On Windows, use `gradlew.bat :app:assembleDebug`. The debug APK is written to `app/build/outputs/apk/debug/app-debug.apk` and can be installed with:
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
 ## Project structure
 
-- `app/` — Android application (Jetpack Compose, Material 3 Expressive, Hilt, MVVM)
+- `app/` — Android application (Jetpack Compose, Material 3 Expressive, MVVM)
 - `core/hid/` — pure-Kotlin core: HID reports, layout mapping, pacing, and the live-typing drain state machine. No Android dependencies; runs under fast JVM tests.
 
 See `SPEC.md` for the full product & technical specification.

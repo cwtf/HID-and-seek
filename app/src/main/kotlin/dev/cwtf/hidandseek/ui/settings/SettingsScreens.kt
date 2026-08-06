@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import dev.cwtf.hidandseek.data.AppearanceSettings
 import dev.cwtf.hidandseek.data.BufferFont
@@ -229,8 +230,11 @@ fun AppearanceSettingsScreen(viewModel: SettingsViewModel, modifier: Modifier = 
     }
 }
 
+private const val PROJECT_URL = "https://github.com/cwtf/HID-and-seek"
+
 @Composable
 fun AboutScreen(modifier: Modifier = Modifier) {
+    val uriHandler = LocalUriHandler.current
     Column(
         modifier
             .fillMaxSize()
@@ -239,6 +243,15 @@ fun AboutScreen(modifier: Modifier = Modifier) {
     ) {
         Text("HID & Seek", style = MaterialTheme.typography.headlineSmall)
         Text("Version 0.1.0", style = MaterialTheme.typography.bodyMedium)
+
+        SettingsSection("Project") {
+            SettingsNote("Author: cwtf")
+            SettingsLink(
+                title = "Source code on GitHub",
+                subtitle = "github.com/cwtf/HID-and-seek",
+                onClick = { uriHandler.openUri(PROJECT_URL) },
+            )
+        }
 
         SettingsSection("Pairing help") {
             SettingsNote(
