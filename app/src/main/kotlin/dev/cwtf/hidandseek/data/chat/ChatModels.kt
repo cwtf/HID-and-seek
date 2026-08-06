@@ -32,6 +32,20 @@ data class ChatMessage(
     val error: String? = null,
     /** A stream that ended early. The partial content is kept, not discarded. */
     val incomplete: Boolean = false,
+    val attachments: List<MessageAttachment> = emptyList(),
+)
+
+data class MessageAttachment(
+    val id: String,
+    val messageId: String,
+    val localPath: String,
+    val mimeType: String,
+    val widthPx: Int,
+    val heightPx: Int,
+    val byteSize: Long,
+    val ocrText: String? = null,
+    /** The file was purged but the message kept; shown as a placeholder. */
+    val deleted: Boolean = false,
 )
 
 /** A message split into prose and fenced code, for rendering and per-block actions. */

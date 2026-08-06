@@ -18,6 +18,8 @@ object SettingsRoutes {
     const val LLM = "settings/llm"
     const val LLM_PROVIDER = "settings/llm/{providerId}"
     const val LLM_MODELS = "settings/llm/{providerId}/models"
+    const val AGENT = "settings/agent"
+    const val DATA = "settings/data"
 
     fun deviceDetail(address: String) = "settings/devices/$address"
 
@@ -38,6 +40,8 @@ object SettingsRoutes {
         route == LLM -> "LLM providers"
         route == LLM_PROVIDER -> "Provider"
         route == LLM_MODELS -> "Select model"
+        route == AGENT -> "Agent typing"
+        route == DATA -> "Data and history"
         else -> "Settings"
     }
 

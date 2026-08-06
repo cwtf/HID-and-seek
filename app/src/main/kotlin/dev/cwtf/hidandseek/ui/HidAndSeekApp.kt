@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material3.AssistChip
@@ -22,7 +23,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -31,11 +36,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -48,6 +56,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dev.cwtf.hidandseek.AppContainer
+import dev.cwtf.hidandseek.SharedContent
 import dev.cwtf.hidandseek.data.DeviceRecord
 import dev.cwtf.hidandseek.hid.TransportState
 import dev.cwtf.hidandseek.ui.settings.AboutScreen
@@ -56,6 +65,9 @@ import dev.cwtf.hidandseek.ui.settings.ConnectionSettingsScreen
 import dev.cwtf.hidandseek.ui.settings.DeviceDetailScreen
 import dev.cwtf.hidandseek.ui.chat.ChatScreen
 import dev.cwtf.hidandseek.ui.chat.ChatViewModel
+import dev.cwtf.hidandseek.ui.chat.ConversationDrawer
+import dev.cwtf.hidandseek.ui.settings.AgentSettingsScreen
+import dev.cwtf.hidandseek.ui.settings.DataSettingsScreen
 import dev.cwtf.hidandseek.ui.settings.DevicesScreen
 import dev.cwtf.hidandseek.ui.settings.LiveSettingsScreen
 import dev.cwtf.hidandseek.ui.settings.LlmProviderEditorScreen
@@ -74,7 +86,11 @@ private const val ROUTE_CHAT = "chat"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HidAndSeekApp(container: AppContainer) {
+fun HidAndSeekApp(
+    container: AppContainer,
+    sharedContent: SharedContent? = null,
+    onSharedContentConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route
@@ -104,9 +120,37 @@ fun HidAndSeekApp(container: AppContainer) {
         }
     }
 
-    val inSettings = SettingsRoutes.isSettings(route)
+    // Something shared in from elsewhere lands in the chat composer, on the
+    // chat tab, ready to send — not in a holding area to be found later.
+    LaunchedEffect(sharedContent) {
+        when (sharedContent) {
+            is SharedContent.Image -> chatViewModel.attach(sharedContent.uri)
+            is SharedContent.Text -> chatViewModel.onComposerChange(sharedContent.text)
+            null -> return@LaunchedEffect
+        }
+        navController.navigateToTab(ROUTE_CHAT)
+        onSharedContentConsumed()
+    }
 
-    Scaffold(
+    val inSettings = SettingsRoutes.isSettings(route)
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        // Only the chat tab has a drawer; elsewhere an edge swipe would be a
+        // surprise.
+        gesturesEnabled = route == ROUTE_CHAT,
+        drawerContent = {
+            ModalDrawerSheet {
+                ConversationDrawer(
+                    viewModel = chatViewModel,
+                    onConversationChosen = { scope.launch { drawerState.close() } },
+                )
+            }
+        },
+    ) {
+        Scaffold(
         topBar = {
             TopAppBar(
                 title = {
@@ -119,12 +163,18 @@ fun HidAndSeekApp(container: AppContainer) {
                     )
                 },
                 navigationIcon = {
-                    if (inSettings) {
-                        IconButton(onClick = { navController.popBackStack() }) {
+                    when {
+                        inSettings -> IconButton(onClick = { navController.popBackStack() }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
                             )
+                        }
+
+                        route == ROUTE_CHAT -> IconButton(
+                            onClick = { scope.launch { drawerState.open() } },
+                        ) {
+                            Icon(Icons.Default.Menu, contentDescription = "Conversations")
                         }
                     }
                 },
@@ -227,11 +277,14 @@ fun HidAndSeekApp(container: AppContainer) {
                     onForgotten = { navController.popBackStack() },
                 )
             }
+            composable(SettingsRoutes.AGENT) { AgentSettingsScreen(settingsViewModel) }
+            composable(SettingsRoutes.DATA) { DataSettingsScreen(settingsViewModel) }
             composable(SettingsRoutes.CONNECTION) { ConnectionSettingsScreen(settingsViewModel) }
             composable(SettingsRoutes.TYPING) { TypingSettingsScreen(settingsViewModel) }
             composable(SettingsRoutes.LIVE) { LiveSettingsScreen(settingsViewModel) }
             composable(SettingsRoutes.APPEARANCE) { AppearanceSettingsScreen(settingsViewModel) }
             composable(SettingsRoutes.ABOUT) { AboutScreen() }
+            }
         }
     }
 

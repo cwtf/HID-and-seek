@@ -1,5 +1,6 @@
 package dev.cwtf.hidandseek.data
 
+import dev.cwtf.hidandseek.data.agent.AgentSettings
 import dev.cwtf.hidandseek.hid.OverCapAction
 import dev.cwtf.hidandseek.hid.ReconnectPolicy
 import kotlinx.serialization.Serializable
@@ -17,6 +18,18 @@ data class AppSettings(
     val live: LiveSettings = LiveSettings(),
     val connection: ConnectionSettings = ConnectionSettings(),
     val appearance: AppearanceSettings = AppearanceSettings(),
+    val agent: AgentSettings = AgentSettings(),
+    val attachments: AttachmentSettings = AttachmentSettings(),
+)
+
+/** SPEC 6.2.3 — image handling before anything leaves the device. */
+@Serializable
+data class AttachmentSettings(
+    val maxImagesPerMessage: Int = 4,
+    /** Longest edge after downscaling. Beyond this, providers downsample anyway. */
+    val maxEdgePx: Int = 1_568,
+    val jpegQuality: Int = 85,
+    val maxPayloadBytes: Int = 4 * 1024 * 1024,
 )
 
 // --- keystroke timing (SPEC 7.3.1) ------------------------------------------

@@ -848,7 +848,7 @@ over HID**, all without the host having a working network connection or usable i
 
 | Source | Mechanism | Permission |
 |---|---|---|
-| **Camera** | In-app capture via `CameraX` | `CAMERA`, requested on first use |
+| **Camera** | System camera app via `ACTION_IMAGE_CAPTURE` | **None** — see note |
 | **Gallery** | Android Photo Picker (`PickVisualMedia`) | **None** — the picker grants per-item access |
 | **Clipboard** | Paste an image copied elsewhere | None |
 | **Share sheet** | The app registers as a `image/*` share target, so a screenshot can be shared into a new or existing chat from anywhere | None |
@@ -856,6 +856,14 @@ over HID**, all without the host having a working network connection or usable i
 The share-target route matters more than it looks: taking an Android screenshot and hitting Share →
 HID & Seek is the fastest path from "something's wrong on my phone" to "ask the model", and it
 works from the screenshot notification without opening the app first.
+
+> **Implementation note — the app needs no permissions at all for images.** The
+> Android Photo Picker grants per-item access, and delegating capture to the
+> system camera app via `ACTION_IMAGE_CAPTURE` avoids `CAMERA` entirely (an app
+> only needs that permission if it declares it, which this one does not).
+> Earlier drafts specified in-app `CameraX` capture and a `CAMERA` permission;
+> the delegated route is strictly better — one fewer permission to request, one
+> fewer to justify, and nothing lost but an in-app viewfinder.
 
 ##### Composer UI
 
@@ -1235,7 +1243,6 @@ Transient live-typing state (`sentIndex`, pending region, retraction pending-dec
 | `BLUETOOTH_ADVERTISE` | Be discoverable as a keyboard | On "Add a device" |
 | `INTERNET` | LLM API calls | Manifest only |
 | `POST_NOTIFICATIONS` | Foreground service notification | First connect |
-| `CAMERA` | Photograph a host screen for the chat (§6.2.3) | First in-app capture |
 | `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_CONNECTED_DEVICE` | Hold the session | Manifest only |
 
 No location permission, no storage/media permission (the Android Photo Picker grants per-item

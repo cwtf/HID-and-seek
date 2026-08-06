@@ -3,6 +3,7 @@ package dev.cwtf.hidandseek.data.chat
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
+import dev.cwtf.hidandseek.data.agent.AgentAuditEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,15 +61,62 @@ class ChatRepository(context: Context) {
 
     private suspend fun loadMessages(conversationId: String): List<ChatMessage> =
         withContext(Dispatchers.IO) {
-            helper.readableDatabase.rawQuery(
+            val db = helper.readableDatabase
+
+            // Attachments for the whole conversation in one query, then grouped
+            // — one query per message would be a round trip per bubble.
+            val attachmentsByMessage = db.rawQuery(
+                """
+                SELECT a.* FROM attachments a
+                JOIN messages m ON m.id = a.message_id
+                WHERE m.conversation_id = ?
+                """.trimIndent(),
+                arrayOf(conversationId),
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(cursor.toAttachment())
+                }
+            }.groupBy { it.messageId }
+
+            db.rawQuery(
                 "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
                 arrayOf(conversationId),
             ).use { cursor ->
                 buildList {
-                    while (cursor.moveToNext()) add(cursor.toMessage())
+                    while (cursor.moveToNext()) {
+                        val message = cursor.toMessage()
+                        add(
+                            message.copy(
+                                attachments = attachmentsByMessage[message.id].orEmpty(),
+                            ),
+                        )
+                    }
                 }
             }
         }
+
+    suspend fun addAttachment(attachment: MessageAttachment) = write { db ->
+        db.insert(
+            "attachments",
+            null,
+            ContentValues().apply {
+                put("id", attachment.id)
+                put("message_id", attachment.messageId)
+                put("local_path", attachment.localPath)
+                put("mime_type", attachment.mimeType)
+                put("width_px", attachment.widthPx)
+                put("height_px", attachment.heightPx)
+                put("byte_size", attachment.byteSize)
+                put("ocr_text", attachment.ocrText)
+                put("deleted", if (attachment.deleted) 1 else 0)
+            },
+        )
+    }
+
+    /** Marks every image purged, keeping the messages that carried them. */
+    suspend fun markAllAttachmentsDeleted() = write { db ->
+        db.execSQL("UPDATE attachments SET deleted = 1")
+    }
 
     suspend fun createConversation(
         title: String,
@@ -211,6 +259,64 @@ class ChatRepository(context: Context) {
             }
         }
 
+    // --- agent audit --------------------------------------------------------
+
+    /**
+     * Every agent typing request, allowed or not.
+     *
+     * Written in all modes including Ask, so there is always a record of what
+     * a model asked to put into a machine — not only what it managed to.
+     */
+    suspend fun recordAgentEvent(entry: AgentAuditEntry) = write { db ->
+        db.insert(
+            "agent_audit",
+            null,
+            ContentValues().apply {
+                put("id", entry.id)
+                put("device_address", entry.deviceAddress)
+                put("mode", entry.mode.name)
+                put("preview", entry.preview)
+                put("char_count", entry.charCount)
+                put("approved", if (entry.approved) 1 else 0)
+                put("result", entry.result)
+                put("at", entry.atEpochMs)
+            },
+        )
+    }
+
+    val agentAudit: Flow<List<AgentAuditEntry>> =
+        revision.flatMapLatest { flow { emit(loadAudit()) } }
+
+    private suspend fun loadAudit(): List<AgentAuditEntry> = withContext(Dispatchers.IO) {
+        helper.readableDatabase.rawQuery(
+            "SELECT * FROM agent_audit ORDER BY at DESC LIMIT 200",
+            null,
+        ).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    add(
+                        AgentAuditEntry(
+                            id = cursor.string("id"),
+                            deviceAddress = cursor.stringOrNull("device_address"),
+                            mode = runCatching {
+                                dev.cwtf.hidandseek.data.agent.AgentMode.valueOf(
+                                    cursor.string("mode"),
+                                )
+                            }.getOrDefault(dev.cwtf.hidandseek.data.agent.AgentMode.ASK),
+                            preview = cursor.string("preview"),
+                            charCount = cursor.int("char_count"),
+                            approved = cursor.int("approved") == 1,
+                            result = cursor.string("result"),
+                            atEpochMs = cursor.long("at"),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun clearAgentAudit() = write { it.delete("agent_audit", null, null) }
+
     // --- statistics, for the data settings screen ---------------------------
 
     suspend fun stats(): ChatStats = withContext(Dispatchers.IO) {
@@ -266,6 +372,18 @@ private fun Cursor.toMessage() = ChatMessage(
     createdAtEpochMs = long("created_at"),
     error = stringOrNull("error"),
     incomplete = int("incomplete") == 1,
+)
+
+private fun Cursor.toAttachment() = MessageAttachment(
+    id = string("id"),
+    messageId = string("message_id"),
+    localPath = string("local_path"),
+    mimeType = string("mime_type"),
+    widthPx = int("width_px"),
+    heightPx = int("height_px"),
+    byteSize = long("byte_size"),
+    ocrText = stringOrNull("ocr_text"),
+    deleted = int("deleted") == 1,
 )
 
 private fun ChatMessage.toValues() = ContentValues().apply {

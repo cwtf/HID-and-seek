@@ -79,23 +79,60 @@ class ChatDatabase(context: Context) : SQLiteOpenHelper(context, NAME, null, VER
             END
             """.trimIndent(),
         )
+
+        createAgentAudit(db)
+        createAttachments(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Nothing has shipped yet, so there is no migration history to honour.
-        // Once a build is in someone's hands this must become real migrations —
-        // chat history is kept forever and must never be dropped by an upgrade.
-        db.execSQL("DROP TRIGGER IF EXISTS messages_fts_insert")
-        db.execSQL("DROP TRIGGER IF EXISTS messages_fts_delete")
-        db.execSQL("DROP TRIGGER IF EXISTS messages_fts_update")
-        db.execSQL("DROP TABLE IF EXISTS messages_fts")
-        db.execSQL("DROP TABLE IF EXISTS messages")
-        db.execSQL("DROP TABLE IF EXISTS conversations")
-        onCreate(db)
+        // Additive only. Chat history is kept forever, so an upgrade must never
+        // drop a table — a migration that loses data is worse than no feature.
+        if (oldVersion < 2) {
+            createAgentAudit(db)
+            createAttachments(db)
+        }
+    }
+
+    private fun createAgentAudit(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS agent_audit (
+                id TEXT PRIMARY KEY NOT NULL,
+                device_address TEXT,
+                mode TEXT NOT NULL,
+                preview TEXT NOT NULL,
+                char_count INTEGER NOT NULL,
+                approved INTEGER NOT NULL,
+                result TEXT NOT NULL,
+                at INTEGER NOT NULL
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_agent_audit_at ON agent_audit(at DESC)")
+    }
+
+    private fun createAttachments(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS attachments (
+                id TEXT PRIMARY KEY NOT NULL,
+                message_id TEXT NOT NULL,
+                local_path TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                width_px INTEGER NOT NULL,
+                height_px INTEGER NOT NULL,
+                byte_size INTEGER NOT NULL,
+                ocr_text TEXT,
+                deleted INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments(message_id)")
     }
 
     companion object {
         const val NAME = "chat.db"
-        const val VERSION = 1
+        const val VERSION = 2
     }
 }

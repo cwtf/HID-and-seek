@@ -12,7 +12,9 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -76,6 +78,18 @@ fun SettingsRootScreen(
                 icon = Icons.Default.Cloud,
                 onClick = { onNavigate(SettingsRoutes.LLM) },
             )
+            SettingsLink(
+                title = "Agent typing",
+                subtitle = "Limits, confirmation patterns, audit log",
+                icon = Icons.Default.SmartToy,
+                onClick = { onNavigate(SettingsRoutes.AGENT) },
+            )
+            SettingsLink(
+                title = "Data and history",
+                subtitle = "Storage used, delete chat history",
+                icon = Icons.Default.Storage,
+                onClick = { onNavigate(SettingsRoutes.DATA) },
+            )
         }
 
         SettingsSection("App") {
@@ -92,10 +106,6 @@ fun SettingsRootScreen(
             )
         }
 
-        SettingsSection("Not built yet") {
-            SettingsLink(title = "Agent typing", subtitle = "See SPEC.md 6.3") {}
-            SettingsLink(title = "Data and history", subtitle = "See SPEC.md 7.7") {}
-        }
     }
 }
 

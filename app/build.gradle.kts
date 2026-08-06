@@ -62,6 +62,10 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
     implementation(libs.okhttp.sse)
+    implementation(libs.androidx.exifinterface)
+    // Bundled, so OCR runs entirely on-device — choosing "send as text" means
+    // the image itself never leaves the phone.
+    implementation(libs.mlkit.text.recognition)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

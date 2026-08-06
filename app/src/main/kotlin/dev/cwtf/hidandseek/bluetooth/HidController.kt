@@ -4,6 +4,7 @@ import android.content.Context
 import dev.cwtf.hidandseek.data.ResolvedConfig
 import dev.cwtf.hidandseek.hid.BuiltInLayouts
 import dev.cwtf.hidandseek.hid.DrainPlan
+import dev.cwtf.hidandseek.hid.KeyCombo
 import dev.cwtf.hidandseek.hid.KeyLayout
 import dev.cwtf.hidandseek.hid.KeyStroke
 import dev.cwtf.hidandseek.hid.LayoutMapper
@@ -167,6 +168,31 @@ class HidController(context: Context) {
             is TypeResult.Partial -> drain.onTextTyped(text.take(result.charsDelivered))
             is TypeResult.Rejected -> Unit
         }
+    }
+
+    /** Presses a key combination such as `ctrl+alt+t`. */
+    suspend fun pressCombo(combo: String): TypeResult {
+        val stroke = KeyCombo.parse(combo, layout)
+            ?: return TypeResult.Rejected(IllegalArgumentException("Unrecognised key combo: $combo"))
+
+        return sendLock.withLock {
+            val outcome = pacer.send(ReportScheduler.schedule(listOf(stroke), profile))
+            when (outcome) {
+                is SendOutcome.Completed -> TypeResult.Delivered(1, 0)
+                is SendOutcome.Failed -> TypeResult.Rejected(outcome.cause)
+                is SendOutcome.Cancelled -> TypeResult.Partial(0, ReportRejected)
+            }
+        }
+    }
+
+    /** Read-only host state, for the agent's `get_host_status` tool. */
+    fun hostStatus(): String = buildString {
+        append("connected=").append(transport.state.value.canSend)
+        append(", layout=").append(layout.id)
+        append(", typingProfile=").append(profile.id)
+        val leds = transport.hostLedState.value
+        append(", capsLock=").append(leds.capsLock)
+        append(", numLock=").append(leds.numLock)
     }
 
     /** Panic key: drop every held key immediately. */

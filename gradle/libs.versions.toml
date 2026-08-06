@@ -26,6 +26,8 @@ hilt = "2.60.1"
 datastore = "1.1.7"
 okhttp = "5.4.0"
 securityCrypto = "1.1.0"
+exifinterface = "1.4.2"
+mlkitTextRecognition = "16.0.1"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -39,6 +41,9 @@ androidx-navigation-compose = { module = "androidx.navigation:navigation-compose
 
 androidx-datastore = { module = "androidx.datastore:datastore", version.ref = "datastore" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
+mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
 
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 okhttp-sse = { module = "com.squareup.okhttp3:okhttp-sse", version.ref = "okhttp" }

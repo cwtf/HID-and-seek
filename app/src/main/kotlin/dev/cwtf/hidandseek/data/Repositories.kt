@@ -6,6 +6,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
 import androidx.datastore.core.Serializer
 import androidx.datastore.dataStoreFile
+import dev.cwtf.hidandseek.data.agent.AgentSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.KSerializer
@@ -78,6 +79,9 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
 
     suspend fun updateAppearance(transform: (AppearanceSettings) -> AppearanceSettings) =
         update { it.copy(appearance = transform(it.appearance)) }
+
+    suspend fun updateAgent(transform: (AgentSettings) -> AgentSettings) =
+        update { it.copy(agent = transform(it.agent)) }
 
     suspend fun resetTyping() = update { it.copy(typing = TypingSettings()) }
 

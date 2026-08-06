@@ -1,5 +1,10 @@
 package dev.cwtf.hidandseek.ui.chat
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Keyboard
@@ -26,6 +32,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,13 +49,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import dev.cwtf.hidandseek.data.agent.AgentMode
+import dev.cwtf.hidandseek.data.agent.ApprovalReason
 import dev.cwtf.hidandseek.data.chat.ChatMessage
 import dev.cwtf.hidandseek.data.chat.ChatRole
 import dev.cwtf.hidandseek.data.chat.MessageSegment
+import dev.cwtf.hidandseek.data.chat.ProcessedImage
 import dev.cwtf.hidandseek.data.chat.parseSegments
 import dev.cwtf.hidandseek.hid.TransportState
 
@@ -105,12 +117,30 @@ fun ChatScreen(
             )
         }
 
+        AttachmentStrip(
+            attachments = viewModel.attachments,
+            estimatedTokens = viewModel.estimatedAttachmentTokens,
+            modelLacksVision = viewModel.modelLacksVision,
+            onRemove = viewModel::removeAttachment,
+            onExtractText = viewModel::extractTextFrom,
+        )
+
+        AgentModeRow(
+            mode = viewModel.agentMode,
+            connected = connected,
+            modelLacksTools = viewModel.modelLacksToolSupport,
+            onModeChange = viewModel::changeAgentMode,
+            onStop = viewModel::stopAgentTyping,
+        )
+
         Composer(
             text = viewModel.composerText,
             isStreaming = viewModel.isStreaming,
+            canSend = viewModel.composerText.isNotBlank() || viewModel.attachments.isNotEmpty(),
             onTextChange = viewModel::onComposerChange,
             onSend = viewModel::send,
             onStop = viewModel::stopGenerating,
+            onAttach = viewModel::attach,
         )
     }
 
@@ -121,6 +151,146 @@ fun ChatScreen(
             onConfirm = viewModel::confirmHostSend,
         )
     }
+
+    viewModel.pendingApproval?.let { approval ->
+        AgentApprovalDialog(
+            approval = approval,
+            onResolve = viewModel::resolveApproval,
+        )
+    }
+}
+
+/**
+ * The agent-typing control.
+ *
+ * Always visible above the composer, because whether a model can put keystrokes
+ * into another machine should never be something you have to go looking for.
+ */
+@Composable
+private fun AgentModeRow(
+    mode: AgentMode,
+    connected: Boolean,
+    modelLacksTools: Boolean,
+    onModeChange: (AgentMode) -> Unit,
+    onStop: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        if (mode == AgentMode.AUTO) {
+            // Loud on purpose: Auto means keystrokes reach the machine without
+            // another tap, so it should never be ambiguous that it is on.
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "Agent can type without asking",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onStop) { Text("Stop") }
+                }
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                Icons.Default.Keyboard,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Text("Agent typing", style = MaterialTheme.typography.labelMedium)
+
+            AgentMode.entries.forEach { entry ->
+                FilterChip(
+                    selected = mode == entry,
+                    onClick = { onModeChange(entry) },
+                    enabled = connected || entry != AgentMode.AUTO,
+                    label = {
+                        Text(
+                            when (entry) {
+                                AgentMode.OFF -> "Off"
+                                AgentMode.ASK -> "Ask"
+                                AgentMode.AUTO -> "Auto"
+                            },
+                        )
+                    },
+                )
+            }
+        }
+
+        if (modelLacksTools && mode != AgentMode.OFF) {
+            Text(
+                "This model does not support tool calls — agent typing will not work with it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+/**
+ * The approval card.
+ *
+ * Shows the exact text, its length, and why approval was needed. Declining is
+ * the dismiss action, so tapping outside never authorises anything.
+ */
+@Composable
+private fun AgentApprovalDialog(
+    approval: PendingApproval,
+    onResolve: (Boolean) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { onResolve(false) },
+        title = {
+            Text(
+                if (approval.reason == ApprovalReason.BLOCKLISTED) {
+                    "This looks risky — allow it?"
+                } else {
+                    "Let the agent type this?"
+                },
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (approval.reason == ApprovalReason.BLOCKLISTED) {
+                    Text(
+                        "It matched a pattern you asked to be warned about: " +
+                            approval.matchedPatterns.joinToString(", "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Text("${approval.request.text.length} characters will be typed:")
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text(
+                        approval.request.text.take(500),
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(8.dp),
+                    )
+                }
+                if (approval.request.pressEnter) {
+                    Text("Enter will be pressed afterwards.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onResolve(true) }) { Text("Allow") } },
+        dismissButton = { TextButton(onClick = { onResolve(false) }) { Text("Decline") } },
+    )
 }
 
 @Composable
@@ -339,14 +509,89 @@ private fun StreamingBubble(partial: String) {
     }
 }
 
+/**
+ * Pending attachments.
+ *
+ * Shows the token estimate because images are expensive in a way text is not —
+ * a photo can cost more than the whole conversation around it.
+ */
+@Composable
+private fun AttachmentStrip(
+    attachments: List<ProcessedImage>,
+    estimatedTokens: Int,
+    modelLacksVision: Boolean,
+    onRemove: (String) -> Unit,
+    onExtractText: (ProcessedImage) -> Unit,
+) {
+    if (attachments.isEmpty()) return
+
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            attachments.forEach { image ->
+                Card {
+                    Column(Modifier.padding(6.dp)) {
+                        AsyncThumbnail(image)
+                        Row {
+                            TextButton(onClick = { onExtractText(image) }) { Text("Text") }
+                            TextButton(onClick = { onRemove(image.id) }) { Text("Remove") }
+                        }
+                    }
+                }
+            }
+        }
+        Text(
+            "${attachments.size} image(s) · about $estimatedTokens tokens",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (modelLacksVision) {
+            Text(
+                "The selected model cannot read images. Use \"Text\" to extract it on-device " +
+                    "instead, or pick a vision model in Settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AsyncThumbnail(image: ProcessedImage) {
+    val bitmap = remember(image.id) {
+        runCatching {
+            android.graphics.BitmapFactory.decodeFile(image.file.absolutePath)?.asImageBitmap()
+        }.getOrNull()
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = "Attached image",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(72.dp),
+        )
+    } else {
+        Box(Modifier.size(72.dp).background(MaterialTheme.colorScheme.surfaceContainerHighest))
+    }
+}
+
 @Composable
 private fun Composer(
     text: String,
     isStreaming: Boolean,
+    canSend: Boolean,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    onAttach: (Uri) -> Unit,
 ) {
+    // The Android photo picker grants access to the chosen item only, so no
+    // storage or media permission is needed.
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> uri?.let(onAttach) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -354,6 +599,15 @@ private fun Composer(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        IconButton(
+            onClick = {
+                pickImage.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                )
+            },
+        ) {
+            Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Attach an image")
+        }
         OutlinedTextField(
             value = text,
             onValueChange = onTextChange,
@@ -363,7 +617,7 @@ private fun Composer(
         )
         FilledIconButton(
             onClick = if (isStreaming) onStop else onSend,
-            enabled = isStreaming || text.isNotBlank(),
+            enabled = isStreaming || canSend,
         ) {
             if (isStreaming) {
                 Box(Modifier.size(12.dp).background(MaterialTheme.colorScheme.onPrimary))

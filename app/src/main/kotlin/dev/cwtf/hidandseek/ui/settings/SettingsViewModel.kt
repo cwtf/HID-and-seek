@@ -10,7 +10,14 @@ import dev.cwtf.hidandseek.data.DeviceRecord
 import dev.cwtf.hidandseek.data.DeviceRoster
 import dev.cwtf.hidandseek.data.LiveSettings
 import dev.cwtf.hidandseek.data.TypingSettings
+import dev.cwtf.hidandseek.data.agent.AgentAuditEntry
+import dev.cwtf.hidandseek.data.agent.AgentSettings
+import dev.cwtf.hidandseek.data.chat.ChatStats
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(private val container: AppContainer) : ViewModel() {
@@ -89,6 +96,35 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun resetLive() {
         viewModelScope.launch { container.settingsRepository.resetLive() }
+    }
+
+    // --- agent --------------------------------------------------------------
+
+    val agentAudit: StateFlow<List<AgentAuditEntry>> = container.chatRepository.agentAudit
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun updateAgent(transform: (AgentSettings) -> AgentSettings) {
+        viewModelScope.launch { container.settingsRepository.updateAgent(transform) }
+    }
+
+    fun clearAgentAudit() {
+        viewModelScope.launch { container.chatRepository.clearAgentAudit() }
+    }
+
+    // --- chat data ----------------------------------------------------------
+
+    var chatStats by androidx.compose.runtime.mutableStateOf<ChatStats?>(null)
+        private set
+
+    fun refreshChatStats() {
+        viewModelScope.launch { chatStats = container.chatRepository.stats() }
+    }
+
+    fun deleteAllChatHistory() {
+        viewModelScope.launch {
+            container.chatRepository.deleteAllConversations()
+            chatStats = container.chatRepository.stats()
+        }
     }
 
     // --- connection and appearance ------------------------------------------
