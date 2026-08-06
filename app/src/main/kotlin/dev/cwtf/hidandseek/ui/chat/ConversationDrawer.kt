@@ -1,5 +1,7 @@
 package dev.cwtf.hidandseek.ui.chat
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
@@ -28,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.cwtf.hidandseek.data.chat.Conversation
 import java.text.DateFormat
@@ -47,8 +51,26 @@ fun ConversationDrawer(
     modifier: Modifier = Modifier,
 ) {
     val conversations by viewModel.conversations.collectAsState()
+    val context = LocalContext.current
     var renaming by remember { mutableStateOf<Conversation?>(null) }
     var deleting by remember { mutableStateOf<Conversation?>(null) }
+    var exporting by remember { mutableStateOf<Conversation?>(null) }
+
+    // Export goes through the system file picker, so no storage permission is
+    // needed and the user chooses where it lands.
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/markdown"),
+    ) { uri ->
+        val target = uri
+        if (target != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(target)?.use { stream ->
+                    stream.write(viewModel.exportMarkdown().encodeToByteArray())
+                }
+            }
+        }
+        exporting = null
+    }
 
     Column(modifier.fillMaxSize().padding(top = 16.dp)) {
         Text(
@@ -102,6 +124,20 @@ fun ConversationDrawer(
                     },
                     trailingContent = {
                         Row {
+                            IconButton(
+                                onClick = {
+                                    // Export writes the conversation that is
+                                    // open, so select it first.
+                                    viewModel.selectConversation(conversation.id)
+                                    exporting = conversation
+                                    exportLauncher.launch("${conversation.title.take(40)}.md")
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Default.FileDownload,
+                                    contentDescription = "Export as Markdown",
+                                )
+                            }
                             IconButton(
                                 onClick = {
                                     viewModel.setPinned(conversation.id, !conversation.pinned)

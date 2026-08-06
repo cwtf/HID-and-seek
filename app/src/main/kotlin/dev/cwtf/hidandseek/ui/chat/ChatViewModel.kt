@@ -109,6 +109,15 @@ class ChatViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** Attaches an image sitting on the clipboard, if there is one. */
+    fun attachFromClipboard(uri: Uri?) {
+        if (uri == null) {
+            status = "No image on the clipboard"
+            return
+        }
+        attach(uri)
+    }
+
     fun removeAttachment(id: String) {
         attachments.firstOrNull { it.id == id }?.let(container.imageProcessor::delete)
         attachments = attachments.filterNot { it.id == id }
@@ -198,6 +207,80 @@ class ChatViewModel(private val container: AppContainer) : ViewModel() {
 
     fun deleteMessage(id: String) {
         viewModelScope.launch { chats.deleteMessage(id) }
+    }
+
+    /**
+     * Discards the last reply and asks again.
+     *
+     * The old reply is deleted rather than kept alongside the new one — a
+     * transcript with two answers to the same question is worse than one, and
+     * the whole point is that the first attempt was not wanted.
+     */
+    fun regenerate() {
+        val provider = providers.value.active ?: return
+        val conversation = activeConversation ?: return
+        if (isStreaming) return
+
+        val all = messages.value
+        val lastAssistant = all.indexOfLast { it.role == ChatRole.ASSISTANT }
+        if (lastAssistant < 0) return
+
+        val history = all.take(lastAssistant).toWire()
+        streamJob = viewModelScope.launch {
+            chats.deleteFrom(conversation.id, all[lastAssistant].createdAtEpochMs)
+            rateState = rateState.startTurn()
+            runAgentLoop(provider, conversation, trimToBudget(withHostContext(history)))
+        }
+    }
+
+    /**
+     * Puts a user message back in the composer and drops everything from it on.
+     *
+     * Editing a question invalidates the answers that followed it, so they go
+     * too — leaving them would make the transcript describe a conversation that
+     * never happened.
+     */
+    fun editAndResend(message: ChatMessage) {
+        val conversation = activeConversation ?: return
+        if (isStreaming || message.role != ChatRole.USER) return
+
+        composerText = message.content
+        viewModelScope.launch {
+            chats.deleteFrom(conversation.id, message.createdAtEpochMs)
+        }
+    }
+
+    /** Renders the active conversation as Markdown for export. */
+    fun exportMarkdown(): String {
+        val conversation = activeConversation ?: return ""
+        val all = messages.value
+
+        return buildString {
+            appendLine("# ${conversation.title}")
+            appendLine()
+            conversation.model?.let { appendLine("Model: `$it`") }
+            appendLine(
+                "Exported: " + java.text.DateFormat.getDateTimeInstance()
+                    .format(java.util.Date()),
+            )
+            appendLine()
+            all.forEach { message ->
+                val who = when (message.role) {
+                    ChatRole.USER -> "You"
+                    ChatRole.ASSISTANT -> "Assistant"
+                    ChatRole.SYSTEM -> "System"
+                }
+                appendLine("## $who")
+                appendLine()
+                appendLine(message.content)
+                if (message.attachments.isNotEmpty()) {
+                    appendLine()
+                    appendLine("_${message.attachments.size} image(s) not included in export_")
+                }
+                if (message.incomplete) appendLine("\n_Reply was cut short._")
+                appendLine()
+            }
+        }
     }
 
     // --- search -------------------------------------------------------------

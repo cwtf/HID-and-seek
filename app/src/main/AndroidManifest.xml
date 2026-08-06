@@ -55,8 +55,23 @@
             </intent-filter>
         </activity>
 
+        <!--
+            Lets the system camera app write a capture into our private storage.
+            Delegating capture this way means the app needs no CAMERA permission
+            of its own.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <service
-            android:name=".hid.HidConnectionService"
+            android:name=".bluetooth.HidConnectionService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 

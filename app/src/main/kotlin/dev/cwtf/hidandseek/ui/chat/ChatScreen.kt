@@ -6,6 +6,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,11 +27,15 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -49,9 +54,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -59,6 +66,7 @@ import dev.cwtf.hidandseek.data.agent.AgentMode
 import dev.cwtf.hidandseek.data.agent.ApprovalReason
 import dev.cwtf.hidandseek.data.chat.ChatMessage
 import dev.cwtf.hidandseek.data.chat.ChatRole
+import dev.cwtf.hidandseek.data.chat.MessageAttachment
 import dev.cwtf.hidandseek.data.chat.MessageSegment
 import dev.cwtf.hidandseek.data.chat.ProcessedImage
 import dev.cwtf.hidandseek.data.chat.parseSegments
@@ -97,8 +105,13 @@ fun ChatScreen(
                 MessageBubble(
                     message = message,
                     connected = connected,
+                    canRegenerate = message.role == ChatRole.ASSISTANT &&
+                        message.id == messages.lastOrNull { it.role == ChatRole.ASSISTANT }?.id &&
+                        !viewModel.isStreaming,
                     onTypeToHost = viewModel::requestHostSend,
                     onDelete = { viewModel.deleteMessage(message.id) },
+                    onRegenerate = viewModel::regenerate,
+                    onEdit = { viewModel.editAndResend(message) },
                 )
             }
 
@@ -141,6 +154,7 @@ fun ChatScreen(
             onSend = viewModel::send,
             onStop = viewModel::stopGenerating,
             onAttach = viewModel::attach,
+            onPasteImage = viewModel::attachFromClipboard,
         )
     }
 
@@ -312,12 +326,16 @@ private fun NoProviderCard(onOpenProviderSettings: () -> Unit) {
 private fun MessageBubble(
     message: ChatMessage,
     connected: Boolean,
+    canRegenerate: Boolean,
     onTypeToHost: (String) -> Unit,
     onDelete: () -> Unit,
+    onRegenerate: () -> Unit,
+    onEdit: () -> Unit,
 ) {
     val isUser = message.role == ChatRole.USER
     val clipboard = LocalClipboardManager.current
     var showActions by remember { mutableStateOf(false) }
+    var zoomed by remember { mutableStateOf<MessageAttachment?>(null) }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -333,6 +351,19 @@ private fun MessageBubble(
             modifier = Modifier.widthIn(max = 340.dp),
         ) {
             Column(Modifier.padding(12.dp)) {
+                if (message.attachments.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        message.attachments.forEach { attachment ->
+                            SentAttachment(attachment) { zoomed = attachment }
+                        }
+                    }
+                }
+
                 parseSegments(message.content).forEach { segment ->
                     when (segment) {
                         is MessageSegment.Text -> Text(
@@ -382,6 +413,24 @@ private fun MessageBubble(
                             modifier = Modifier.size(16.dp),
                         )
                     }
+                    if (isUser) {
+                        IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Edit and send again",
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                    if (canRegenerate) {
+                        IconButton(onClick = onRegenerate, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Ask again",
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = { showActions = true },
                         modifier = Modifier.size(32.dp),
@@ -411,6 +460,72 @@ private fun MessageBubble(
                 TextButton(onClick = { showActions = false }) { Text("Cancel") }
             },
         )
+    }
+
+    zoomed?.let { attachment ->
+        AlertDialog(
+            onDismissRequest = { zoomed = null },
+            confirmButton = { TextButton(onClick = { zoomed = null }) { Text("Close") } },
+            text = {
+                val bitmap = remember(attachment.id) {
+                    runCatching {
+                        android.graphics.BitmapFactory
+                            .decodeFile(attachment.localPath)?.asImageBitmap()
+                    }.getOrNull()
+                }
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap,
+                        contentDescription = "Attached image",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    Text("This image is no longer stored on the device.")
+                }
+            },
+        )
+    }
+}
+
+/**
+ * An image already sent.
+ *
+ * Purged images leave a placeholder rather than vanishing, so a message still
+ * reads as having had a picture attached to it.
+ */
+@Composable
+private fun SentAttachment(attachment: MessageAttachment, onClick: () -> Unit) {
+    val bitmap = remember(attachment.id, attachment.deleted) {
+        if (attachment.deleted) {
+            null
+        } else {
+            runCatching {
+                android.graphics.BitmapFactory.decodeFile(attachment.localPath)?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = "Attached image",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(96.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(onClick = onClick),
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("image\ndeleted", style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 
@@ -585,12 +700,27 @@ private fun Composer(
     onSend: () -> Unit,
     onStop: () -> Unit,
     onAttach: (Uri) -> Unit,
+    onPasteImage: (Uri?) -> Unit,
 ) {
+    val context = LocalContext.current
+    var showAttachMenu by remember { mutableStateOf(false) }
+    var captureUri by remember { mutableStateOf<Uri?>(null) }
+
     // The Android photo picker grants access to the chosen item only, so no
     // storage or media permission is needed.
     val pickImage = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri -> uri?.let(onAttach) }
+
+    // Capture is delegated to the system camera app, which is what keeps
+    // CAMERA off this app's permission list entirely.
+    val takePicture = rememberLauncherForActivityResult(
+        ActivityResultContracts.TakePicture(),
+    ) { saved ->
+        if (saved) captureUri?.let(onAttach)
+        captureUri = null
+        ImageSources.cleanUpCaptures(context)
+    }
 
     Row(
         modifier = Modifier
@@ -599,14 +729,42 @@ private fun Composer(
         verticalAlignment = Alignment.Bottom,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        IconButton(
-            onClick = {
-                pickImage.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+        Box {
+            IconButton(onClick = { showAttachMenu = true }) {
+                Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Attach an image")
+            }
+            DropdownMenu(
+                expanded = showAttachMenu,
+                onDismissRequest = { showAttachMenu = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Photo library") },
+                    onClick = {
+                        showAttachMenu = false
+                        pickImage.launch(
+                            PickVisualMediaRequest(
+                                ActivityResultContracts.PickVisualMedia.ImageOnly,
+                            ),
+                        )
+                    },
                 )
-            },
-        ) {
-            Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Attach an image")
+                DropdownMenuItem(
+                    text = { Text("Take a photo") },
+                    onClick = {
+                        showAttachMenu = false
+                        val uri = ImageSources.createCaptureUri(context)
+                        captureUri = uri
+                        takePicture.launch(uri)
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Paste image") },
+                    onClick = {
+                        showAttachMenu = false
+                        onPasteImage(ImageSources.clipboardImage(context))
+                    },
+                )
+            }
         }
         OutlinedTextField(
             value = text,

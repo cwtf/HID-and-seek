@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Only the capture folder is shared, and only with the camera app that is
+    granted access for a single capture. Nothing else in app storage is exposed.
+-->
+<paths>
+    <files-path name="captures" path="captures/" />
+</paths>
