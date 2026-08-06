@@ -295,6 +295,17 @@ Profiles are **per-device** (§7.2), so a KVM'd lab box can sit on `BIOS` while 
 **Humanize** adds ±jitter (Gaussian, σ = 30% of the inter-key value, clamped to ≥0) for hosts or
 software that reject machine-perfect timing.
 
+> **Field finding (first real-device test).** Repeated identical characters were
+> arriving halved — `ssss` as `ss` — because the gap between releasing a key and
+> pressing it again was too short for the host to tell a repeat from key-repeat
+> chatter. Hence `repeatedKeyExtraDelayMs`, applied only when consecutive
+> strokes share a usage code. On the host tested, **repeats were only fully
+> reliable at the BIOS profile's 100 ms**; 30 ms (Normal) improved matters but
+> did not fix them. The defaults are unchanged pending more hosts to compare —
+> if this proves general rather than host-specific, Normal should rise toward
+> 60–100 ms. Note the general inter-key delay was *not* the problem: ordinary
+> text was unaffected throughout.
+
 Timing is enforced on the HID dispatcher using monotonic scheduling rather than naive `delay()`
 accumulation, so a slow Bluetooth write doesn't compound into progressive drift across a long send.
 

@@ -8,7 +8,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.cwtf.hidandseek.AppContainer
 import dev.cwtf.hidandseek.bluetooth.HidController
+import dev.cwtf.hidandseek.bluetooth.SendPreview
 import dev.cwtf.hidandseek.bluetooth.TypeResult
+import dev.cwtf.hidandseek.hid.Modifiers
 import dev.cwtf.hidandseek.data.DeviceRecord
 import dev.cwtf.hidandseek.hid.HidTarget
 import dev.cwtf.hidandseek.hid.ReconnectPolicy
@@ -200,16 +202,119 @@ class TypeViewModel(private val container: AppContainer) : ViewModel() {
         refreshPending()
     }
 
+    // --- send options -------------------------------------------------------
+
+    var appendEnter by mutableStateOf(false)
+        private set
+    var stripIndent by mutableStateOf(false)
+        private set
+
+    fun toggleAppendEnter() {
+        appendEnter = !appendEnter
+    }
+
+    fun toggleStripIndent() {
+        stripIndent = !stripIndent
+    }
+
+    /** Applies the send options to the raw buffer. */
+    private fun prepared(text: String): String =
+        if (stripIndent) text.lines().joinToString("\n") { it.trimStart() } else text
+
+    // --- preview ------------------------------------------------------------
+
+    var preview by mutableStateOf<SendPreview?>(null)
+        private set
+
+    fun showPreview() {
+        preview = controller.previewSend(prepared(buffer.text), appendEnter)
+    }
+
+    fun dismissPreview() {
+        preview = null
+    }
+
     // --- staged send --------------------------------------------------------
 
-    fun send(appendEnter: Boolean = false) {
+    /** A send waiting on confirmation because of its size. */
+    var pendingConfirm by mutableStateOf<Int?>(null)
+        private set
+
+    fun send() {
         if (isSending) return
-        val text = buffer.text
+        val text = prepared(buffer.text)
         if (text.isEmpty()) return
+
+        val threshold = container.settings.value.typing.confirmSendOverChars
+        if (threshold > 0 && text.length > threshold) {
+            pendingConfirm = text.length
+            return
+        }
+        performSend(text)
+    }
+
+    fun confirmLongSend() {
+        pendingConfirm = null
+        performSend(prepared(buffer.text))
+    }
+
+    fun cancelLongSend() {
+        pendingConfirm = null
+    }
+
+    private fun performSend(text: String) {
+        preview = null
         sendJob = viewModelScope.launch {
             report(controller.typeText(text, appendEnter))
         }
     }
+
+    /** Types the clipboard rather than the buffer. */
+    fun sendClipboard(text: String?) {
+        if (isSending) return
+        if (text.isNullOrEmpty()) {
+            status = "Clipboard is empty"
+            return
+        }
+        sendJob = viewModelScope.launch {
+            report(controller.typeText(prepared(text), appendEnter))
+        }
+    }
+
+    // --- macros -------------------------------------------------------------
+
+    fun pressKey(usage: Int, modifiers: Modifiers) {
+        if (isSending) return
+        sendJob = viewModelScope.launch { report(controller.pressKey(usage, modifiers)) }
+    }
+
+    fun pressCombo(combo: String) {
+        if (isSending) return
+        sendJob = viewModelScope.launch { report(controller.pressCombo(combo)) }
+    }
+
+    fun pressConsumerKey(usage: Int) {
+        if (isSending) return
+        sendJob = viewModelScope.launch { report(controller.pressConsumerKey(usage)) }
+    }
+
+    // --- live-mode watermark ------------------------------------------------
+
+    /**
+     * How much of the buffer the host already holds.
+     *
+     * Rendered as a dimmed prefix so the boundary between sent and pending text
+     * is visible without having to trust a counter.
+     */
+    val sentPrefixLength: Int
+        get() {
+            if (mode != SendMode.LIVE) return 0
+            val sent = controller.drain.sentText
+            val current = buffer.text
+            var i = 0
+            while (i < sent.length && i < current.length && sent[i] == current[i]) i++
+            return i
+        }
 
     fun cancelSend() {
         sendJob?.cancel()

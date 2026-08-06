@@ -3,11 +3,16 @@ package dev.cwtf.hidandseek.bluetooth
 import android.content.Context
 import dev.cwtf.hidandseek.data.ResolvedConfig
 import dev.cwtf.hidandseek.hid.BuiltInLayouts
+import dev.cwtf.hidandseek.hid.ConsumerReport
+import dev.cwtf.hidandseek.hid.Modifiers
 import dev.cwtf.hidandseek.hid.DrainPlan
 import dev.cwtf.hidandseek.hid.KeyCombo
 import dev.cwtf.hidandseek.hid.KeyLayout
 import dev.cwtf.hidandseek.hid.KeyStroke
 import dev.cwtf.hidandseek.hid.LayoutMapper
+import dev.cwtf.hidandseek.hid.LedState
+import dev.cwtf.hidandseek.hid.UnmappableChar
+import dev.cwtf.hidandseek.hid.UnmappableHandling
 import dev.cwtf.hidandseek.hid.LiveDrain
 import dev.cwtf.hidandseek.hid.ReportScheduler
 import dev.cwtf.hidandseek.hid.SendOutcome
@@ -26,6 +31,17 @@ data class SendProgress(
     val charsTotal: Int,
 ) {
     val fraction: Float get() = if (charsTotal == 0) 0f else charsSent.toFloat() / charsTotal
+}
+
+/** What a pending send will do to the host. */
+data class SendPreview(
+    val characters: Int,
+    val strokes: Int,
+    val unmappable: List<UnmappableChar>,
+    val estimatedMs: Long,
+    val warnings: List<String>,
+) {
+    val skipped: Int get() = unmappable.count { it.handling == UnmappableHandling.SKIPPED }
 }
 
 /** Outcome of typing a block of text, in the caller's terms rather than strokes. */
@@ -183,6 +199,60 @@ class HidController(context: Context) {
                 is SendOutcome.Cancelled -> TypeResult.Partial(0, ReportRejected)
             }
         }
+    }
+
+    /**
+     * Presses one key with the given modifiers held.
+     *
+     * Used by the macro sheet, where the key is chosen directly rather than
+     * derived from text.
+     */
+    suspend fun pressKey(usage: Int, modifiers: Modifiers = Modifiers.NONE): TypeResult =
+        sendLock.withLock {
+            val stroke = KeyStroke(modifiers, usage, KeyStroke.Kind.CONTROL)
+            when (val outcome = pacer.send(ReportScheduler.schedule(listOf(stroke), profile))) {
+                is SendOutcome.Completed -> TypeResult.Delivered(1, 0)
+                is SendOutcome.Failed -> TypeResult.Rejected(outcome.cause)
+                is SendOutcome.Cancelled -> TypeResult.Partial(0, ReportRejected)
+            }
+        }
+
+    /** Sends a media or system key on the consumer collection. */
+    suspend fun pressConsumerKey(usage: Int): TypeResult = sendLock.withLock {
+        val down = transport.sendConsumerReport(ConsumerReport(usage))
+        down.exceptionOrNull()?.let { return@withLock TypeResult.Rejected(it) }
+        // Consumer reports are level-triggered too: without the zero report the
+        // host sees the key as still held.
+        transport.sendConsumerReport(ConsumerReport(0))
+        TypeResult.Delivered(1, 0)
+    }
+
+    /**
+     * What a send would do, without doing it.
+     *
+     * Shown before sending because a mistake here lands in someone else's
+     * machine — the characters this layout cannot produce are worth knowing
+     * about beforehand rather than discovering afterwards.
+     */
+    fun previewSend(text: String, appendEnter: Boolean): SendPreview {
+        val source = if (appendEnter) text + "\n" else text
+        val mapping = mapper().map(source)
+        val warnings = buildList {
+            if (source.lines().any { it != it.trimStart() && it.isNotBlank() }) {
+                add("Leading indentation present — editors that auto-indent will mangle it")
+            }
+            if (transport.hostLedState.value == LedState.UNKNOWN) {
+                add("Caps Lock state on the device is unknown")
+            }
+            if (source.length > 5_000) add("This is a long send (${source.length} characters)")
+        }
+        return SendPreview(
+            characters = source.length,
+            strokes = mapping.strokes.size,
+            unmappable = mapping.unmappable,
+            estimatedMs = ReportScheduler.estimateDurationMs(mapping.strokes, profile),
+            warnings = warnings,
+        )
     }
 
     /** Read-only host state, for the agent's `get_host_status` tool. */
