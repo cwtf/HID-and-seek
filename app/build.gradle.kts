@@ -58,7 +58,10 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.datastore)
+    implementation(libs.androidx.security.crypto)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.sse)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

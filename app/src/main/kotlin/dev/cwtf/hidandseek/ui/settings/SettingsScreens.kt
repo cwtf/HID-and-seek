@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
@@ -68,6 +69,15 @@ fun SettingsRootScreen(
             )
         }
 
+        SettingsSection("Chat") {
+            SettingsLink(
+                title = "LLM providers",
+                subtitle = "OpenRouter, DeepSeek, OpenAI, or your own endpoint",
+                icon = Icons.Default.Cloud,
+                onClick = { onNavigate(SettingsRoutes.LLM) },
+            )
+        }
+
         SettingsSection("App") {
             SettingsLink(
                 title = "Appearance",
@@ -83,7 +93,6 @@ fun SettingsRootScreen(
         }
 
         SettingsSection("Not built yet") {
-            SettingsLink(title = "LLM providers", subtitle = "See SPEC.md 6.1") {}
             SettingsLink(title = "Agent typing", subtitle = "See SPEC.md 6.3") {}
             SettingsLink(title = "Data and history", subtitle = "See SPEC.md 7.7") {}
         }

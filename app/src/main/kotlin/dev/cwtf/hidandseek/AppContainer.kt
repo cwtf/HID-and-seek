@@ -7,6 +7,11 @@ import dev.cwtf.hidandseek.data.DeviceRoster
 import dev.cwtf.hidandseek.data.DeviceRosterRepository
 import dev.cwtf.hidandseek.data.SettingsRepository
 import dev.cwtf.hidandseek.data.SettingsResolver
+import dev.cwtf.hidandseek.data.chat.ChatRepository
+import dev.cwtf.hidandseek.data.llm.LlmClient
+import dev.cwtf.hidandseek.data.llm.LlmProviderRepository
+import dev.cwtf.hidandseek.data.llm.LlmProviders
+import dev.cwtf.hidandseek.data.llm.SecretStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,6 +34,14 @@ class AppContainer(context: Context) {
     val settingsRepository = SettingsRepository(context, scope)
     val deviceRosterRepository = DeviceRosterRepository(context, scope)
     val hidController = HidController(context)
+
+    val secretStore = SecretStore(context)
+    val llmProviderRepository = LlmProviderRepository(context, scope, secretStore)
+    val llmClient = LlmClient()
+    val chatRepository = ChatRepository(context)
+
+    val providers: StateFlow<LlmProviders> = llmProviderRepository.providers
+        .stateIn(scope, SharingStarted.Eagerly, LlmProviders())
 
     val settings: StateFlow<AppSettings> = settingsRepository.settings
         .stateIn(scope, SharingStarted.Eagerly, AppSettings())

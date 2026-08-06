@@ -15,8 +15,15 @@ object SettingsRoutes {
     const val LIVE = "settings/live"
     const val APPEARANCE = "settings/appearance"
     const val ABOUT = "settings/about"
+    const val LLM = "settings/llm"
+    const val LLM_PROVIDER = "settings/llm/{providerId}"
+    const val LLM_MODELS = "settings/llm/{providerId}/models"
 
     fun deviceDetail(address: String) = "settings/devices/$address"
+
+    fun llmProvider(id: String) = "settings/llm/$id"
+
+    fun llmModels(id: String) = "settings/llm/$id/models"
 
     fun titleFor(route: String?): String = when {
         route == null -> "Settings"
@@ -28,6 +35,9 @@ object SettingsRoutes {
         route == LIVE -> "Live typing"
         route == APPEARANCE -> "Appearance"
         route == ABOUT -> "About"
+        route == LLM -> "LLM providers"
+        route == LLM_PROVIDER -> "Provider"
+        route == LLM_MODELS -> "Select model"
         else -> "Settings"
     }
 

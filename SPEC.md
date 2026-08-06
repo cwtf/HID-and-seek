@@ -75,7 +75,7 @@ machines" case (§5.3.4).
 | Application ID | `dev.cwtf.hidandseek` — see §2.2 |
 | Architecture | Single Activity, MVVM + unidirectional data flow, Kotlin Flows |
 | DI | Hilt |
-| Persistence | DataStore + kotlinx.serialization (settings, device roster) · Room (chat history, snippets, audit — see note) · EncryptedSharedPreferences (API keys) |
+| Persistence | DataStore + kotlinx.serialization (settings, device roster, providers) · SQLite with FTS4 (chat history — see note) · EncryptedSharedPreferences (API keys) |
 | Networking | OkHttp + SSE for streaming completions |
 | Serialization | kotlinx.serialization |
 | Async | Coroutines + Flow |
@@ -1161,6 +1161,12 @@ Version, build, licenses, source link, HID troubleshooting guide, host-pairing i
     val createdAt: Instant, val updatedAt: Instant,
 )
 
+// NOTE (implemented): chat storage is hand-written SQLite, not Room. KSP has no
+// build for Kotlin 2.4.10 (its latest targets 2.3.x), so Room's annotation
+// processor cannot run at all. Plain SQLite still provides everything this
+// feature needs — foreign keys with cascade delete, an FTS4 index kept in step
+// by triggers, and VACUUM so "delete all history" reclaims the pages rather
+// than leaving content legible in free space. Revisit if KSP catches up.
 @Entity(indices = [Index("conversationId")]) data class MessageEntity(
     @PrimaryKey val id: String, val conversationId: String,
     val role: Role,                       // USER, ASSISTANT, SYSTEM, TOOL

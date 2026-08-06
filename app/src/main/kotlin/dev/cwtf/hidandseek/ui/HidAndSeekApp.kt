@@ -54,8 +54,14 @@ import dev.cwtf.hidandseek.ui.settings.AboutScreen
 import dev.cwtf.hidandseek.ui.settings.AppearanceSettingsScreen
 import dev.cwtf.hidandseek.ui.settings.ConnectionSettingsScreen
 import dev.cwtf.hidandseek.ui.settings.DeviceDetailScreen
+import dev.cwtf.hidandseek.ui.chat.ChatScreen
+import dev.cwtf.hidandseek.ui.chat.ChatViewModel
 import dev.cwtf.hidandseek.ui.settings.DevicesScreen
 import dev.cwtf.hidandseek.ui.settings.LiveSettingsScreen
+import dev.cwtf.hidandseek.ui.settings.LlmProviderEditorScreen
+import dev.cwtf.hidandseek.ui.settings.LlmProvidersScreen
+import dev.cwtf.hidandseek.ui.settings.LlmViewModel
+import dev.cwtf.hidandseek.ui.settings.ModelPickerScreen
 import dev.cwtf.hidandseek.ui.settings.SettingsRootScreen
 import dev.cwtf.hidandseek.ui.settings.SettingsRoutes
 import dev.cwtf.hidandseek.ui.settings.SettingsViewModel
@@ -78,6 +84,12 @@ fun HidAndSeekApp(container: AppContainer) {
     )
     val settingsViewModel: SettingsViewModel = viewModel(
         factory = viewModelFactory { initializer { SettingsViewModel(container) } },
+    )
+    val chatViewModel: ChatViewModel = viewModel(
+        factory = viewModelFactory { initializer { ChatViewModel(container) } },
+    )
+    val llmViewModel: LlmViewModel = viewModel(
+        factory = viewModelFactory { initializer { LlmViewModel(container) } },
     )
 
     val transportState by container.hidController.transport.state.collectAsState()
@@ -160,7 +172,38 @@ fun HidAndSeekApp(container: AppContainer) {
             modifier = Modifier.padding(padding),
         ) {
             composable(ROUTE_TYPE) { TypeScreen(typeViewModel) }
-            composable(ROUTE_CHAT) { NotBuiltYet("Chat", "SPEC.md section 6") }
+            composable(ROUTE_CHAT) {
+                ChatScreen(
+                    viewModel = chatViewModel,
+                    onOpenProviderSettings = { navController.navigate(SettingsRoutes.LLM) },
+                )
+            }
+
+            composable(SettingsRoutes.LLM) {
+                LlmProvidersScreen(
+                    viewModel = llmViewModel,
+                    onOpenProvider = { navController.navigate(SettingsRoutes.llmProvider(it)) },
+                )
+            }
+            composable(SettingsRoutes.LLM_PROVIDER) { entry ->
+                val id = entry.arguments?.getString("providerId").orEmpty()
+                LlmProviderEditorScreen(
+                    viewModel = llmViewModel,
+                    providerId = id,
+                    onOpenModelPicker = {
+                        navController.navigate(SettingsRoutes.llmModels(id))
+                    },
+                    onDeleted = { navController.popBackStack() },
+                )
+            }
+            composable(SettingsRoutes.LLM_MODELS) { entry ->
+                val id = entry.arguments?.getString("providerId").orEmpty()
+                ModelPickerScreen(
+                    viewModel = llmViewModel,
+                    providerId = id,
+                    onChosen = { navController.popBackStack() },
+                )
+            }
 
             composable(SettingsRoutes.ROOT) {
                 SettingsRootScreen(
