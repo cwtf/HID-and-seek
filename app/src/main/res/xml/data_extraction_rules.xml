@@ -6,9 +6,11 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="hid_and_seek_secrets.xml" />
+        <exclude domain="sharedpref" path="hid_and_seek_secrets_v2.xml" />
         <exclude domain="file" path="attachments/" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="hid_and_seek_secrets.xml" />
+        <exclude domain="sharedpref" path="hid_and_seek_secrets_v2.xml" />
     </device-transfer>
 </data-extraction-rules>

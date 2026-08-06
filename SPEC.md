@@ -1315,6 +1315,8 @@ needs it.
 - TLS enforced by default; plain HTTP only for explicitly flagged endpoints, and never for a host
   outside RFC1918/loopback ranges. Network security config disallows cleartext by default.
 - No certificate pinning (users may run local or proxied endpoints).
+- API keys and sensitive snippets use per-value AES-GCM authenticated encryption backed by a
+  non-exportable Android Keystore key; aliases are bound as authenticated data.
 - `FLAG_SECURE` optionally applied to the Type screen when the buffer holds a sensitive snippet.
 - R8 with obfuscation on release; no debug logging of buffer or chat content in release builds
   (release logging tree drops below `WARN` and redacts content fields).

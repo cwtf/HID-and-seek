@@ -127,7 +127,7 @@ class LlmClient {
                 httpClient(provider.timeoutSeconds).newCall(request).execute().use { response ->
                     if (response.code == 404) throw ModelsUnavailable()
                     response.throwIfError()
-                    parseModels(response.body?.string().orEmpty())
+                    parseModels(response.body.string())
                 }
             }
         }

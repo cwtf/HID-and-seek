@@ -40,10 +40,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -55,6 +56,8 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.cwtf.hidandseek.hid.TransportState
+import dev.cwtf.hidandseek.ui.firstTextOrNull
+import kotlinx.coroutines.launch
 
 private val TEXT_FILE_MIME_TYPES = arrayOf(
     "text/*",
@@ -75,7 +78,8 @@ fun TypeScreen(
     val transportState by viewModel.transportState.collectAsState()
     val progress by viewModel.progress.collectAsState()
     val connected = transportState == TransportState.CONNECTED
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     val filePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -214,7 +218,9 @@ fun TypeScreen(
                         connected = connected,
                         onDismiss = { showSendMenu = false },
                         onSendClipboard = {
-                            viewModel.sendClipboard(clipboard.getText()?.text)
+                            scope.launch {
+                                viewModel.sendClipboard(clipboard.getClipEntry().firstTextOrNull())
+                            }
                         },
                         onAttachFile = { filePicker.launch(TEXT_FILE_MIME_TYPES) },
                         onShowSnippets = { showSnippets = true },

@@ -52,15 +52,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.cwtf.hidandseek.data.agent.AgentMode
@@ -72,6 +72,8 @@ import dev.cwtf.hidandseek.data.chat.MessageSegment
 import dev.cwtf.hidandseek.data.chat.ProcessedImage
 import dev.cwtf.hidandseek.data.chat.parseSegments
 import dev.cwtf.hidandseek.hid.TransportState
+import dev.cwtf.hidandseek.ui.plainTextClipEntry
+import kotlinx.coroutines.launch
 
 @Composable
 fun ChatScreen(
@@ -334,7 +336,8 @@ private fun MessageBubble(
     onEdit: () -> Unit,
 ) {
     val isUser = message.role == ChatRole.USER
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     var showActions by remember { mutableStateOf(false) }
     var zoomed by remember { mutableStateOf<MessageAttachment?>(null) }
 
@@ -376,7 +379,11 @@ private fun MessageBubble(
                             segment = segment,
                             connected = connected,
                             onTypeToHost = onTypeToHost,
-                            onCopy = { clipboard.setText(AnnotatedString(segment.code)) },
+                            onCopy = {
+                                scope.launch {
+                                    clipboard.setClipEntry(plainTextClipEntry(segment.code))
+                                }
+                            },
                         )
                     }
                 }
@@ -394,7 +401,11 @@ private fun MessageBubble(
                     horizontalArrangement = Arrangement.End,
                 ) {
                     IconButton(
-                        onClick = { clipboard.setText(AnnotatedString(message.content)) },
+                        onClick = {
+                            scope.launch {
+                                clipboard.setClipEntry(plainTextClipEntry(message.content))
+                            }
+                        },
                         modifier = Modifier.size(32.dp),
                     ) {
                         Icon(

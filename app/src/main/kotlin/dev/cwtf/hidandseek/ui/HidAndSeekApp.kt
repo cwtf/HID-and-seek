@@ -19,7 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Chat
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -394,7 +394,7 @@ private fun NavigationRailForWideScreens(
             railExpanded = false,
             selected = route == ROUTE_CHAT,
             onClick = { onNavigate(ROUTE_CHAT) },
-            icon = { Icon(Icons.Outlined.Chat, contentDescription = null) },
+            icon = { Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = null) },
             label = { Text("Chat") },
         )
     }
