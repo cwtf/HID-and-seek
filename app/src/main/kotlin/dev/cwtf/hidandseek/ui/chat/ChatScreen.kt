@@ -33,11 +33,12 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -591,6 +592,7 @@ private fun CodeBlock(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun StreamingBubble(partial: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
@@ -601,7 +603,9 @@ private fun StreamingBubble(partial: String) {
         ) {
             Column(Modifier.padding(12.dp)) {
                 if (partial.isEmpty()) {
-                    CircularProgressIndicator(Modifier.size(20.dp))
+                    // The shape-morphing expressive indicator: it reads as
+                    // "thinking" rather than "loading a fixed amount".
+                    LoadingIndicator(Modifier.size(28.dp))
                 } else {
                     parseSegments(partial).forEach { segment ->
                         when (segment) {

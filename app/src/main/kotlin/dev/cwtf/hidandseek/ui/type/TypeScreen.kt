@@ -3,6 +3,8 @@ package dev.cwtf.hidandseek.ui.type
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,24 +12,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FlexibleBottomAppBar
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SplitButtonDefaults
+import androidx.compose.material3.SplitButtonLayout
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -50,7 +54,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.cwtf.hidandseek.hid.TransportState
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun TypeScreen(
     viewModel: TypeViewModel,
@@ -104,13 +108,22 @@ fun TypeScreen(
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
 
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            SendMode.entries.forEachIndexed { index, entry ->
-                SegmentedButton(
-                    selected = viewModel.mode == entry,
-                    onClick = { viewModel.requestMode(entry) },
-                    shape = SegmentedButtonDefaults.itemShape(index, SendMode.entries.size),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(
+                ButtonGroupDefaults.ConnectedSpaceBetween,
+            ),
+        ) {
+            SendMode.entries.forEach { entry ->
+                ToggleButton(
+                    checked = viewModel.mode == entry,
+                    onCheckedChange = { viewModel.requestMode(entry) },
                     enabled = entry == SendMode.STAGED || connected,
+                    modifier = Modifier.weight(1f),
+                    shapes = when (entry) {
+                        SendMode.STAGED -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        SendMode.LIVE -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    },
                 ) {
                     Text(if (entry == SendMode.STAGED) "Staged" else "Live")
                 }
@@ -130,17 +143,17 @@ fun TypeScreen(
 
         viewModel.status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
+        FlexibleBottomAppBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            contentPadding = PaddingValues(horizontal = 4.dp),
         ) {
             OutlinedButton(onClick = { showMacros = true }, enabled = connected) {
                 Text("Keys")
             }
-            OutlinedButton(onClick = viewModel::showPreview, enabled = viewModel.buffer.text.isNotEmpty()) {
+            OutlinedButton(
+                onClick = viewModel::showPreview,
+                enabled = viewModel.buffer.text.isNotEmpty(),
+            ) {
                 Text("Preview")
             }
 
@@ -148,35 +161,48 @@ fun TypeScreen(
                 OutlinedButton(onClick = viewModel::catchUpNow) { Text("Catch up") }
             }
 
-            Row(modifier = Modifier.weight(1f)) {}
+            Spacer(Modifier.weight(1f))
 
             if (progress != null) {
                 Button(onClick = viewModel::cancelSend) { Text("Stop") }
             } else {
-                Button(
-                    onClick = viewModel::send,
-                    enabled = connected && viewModel.buffer.text.isNotEmpty(),
-                ) {
-                    Text("Send")
+                Box {
+                    // Split button: the common action is one tap, the variants
+                    // are behind the chevron rather than crowding the bar.
+                    SplitButtonLayout(
+                        leadingButton = {
+                            SplitButtonDefaults.LeadingButton(
+                                onClick = viewModel::send,
+                                enabled = connected && viewModel.buffer.text.isNotEmpty(),
+                            ) {
+                                Text("Send")
+                            }
+                        },
+                        trailingButton = {
+                            SplitButtonDefaults.TrailingButton(
+                                checked = showSendMenu,
+                                onCheckedChange = { showSendMenu = it },
+                            ) {
+                                Icon(
+                                    Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "More send options",
+                                )
+                            }
+                        },
+                    )
+                    SendOptionsMenu(
+                        expanded = showSendMenu,
+                        viewModel = viewModel,
+                        connected = connected,
+                        onDismiss = { showSendMenu = false },
+                        onSendClipboard = {
+                            viewModel.sendClipboard(clipboard.getText()?.text)
+                        },
+                        onShowSnippets = { showSnippets = true },
+                        onShowBroadcast = { showBroadcast = true },
+                        onShowAddDevice = { showAddDevice = true },
+                    )
                 }
-            }
-
-            Box {
-                IconButton(onClick = { showSendMenu = true }) {
-                    Icon(Icons.Default.MoreVert, contentDescription = "More send options")
-                }
-                SendOptionsMenu(
-                    expanded = showSendMenu,
-                    viewModel = viewModel,
-                    connected = connected,
-                    onDismiss = { showSendMenu = false },
-                    onSendClipboard = {
-                        viewModel.sendClipboard(clipboard.getText()?.text)
-                    },
-                    onShowSnippets = { showSnippets = true },
-                    onShowBroadcast = { showBroadcast = true },
-                    onShowAddDevice = { showAddDevice = true },
-                )
             }
         }
     }

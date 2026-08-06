@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -19,6 +21,12 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LargeFlexibleTopAppBar
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.WideNavigationRail
+import androidx.compose.material3.WideNavigationRailItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -45,6 +53,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -84,7 +94,7 @@ import dev.cwtf.hidandseek.ui.type.TypeViewModel
 private const val ROUTE_TYPE = "type"
 private const val ROUTE_CHAT = "chat"
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun HidAndSeekApp(
     container: AppContainer,
@@ -135,6 +145,10 @@ fun HidAndSeekApp(
     val inSettings = SettingsRoutes.isSettings(route)
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    // Width, not device type: a foldable opened out should get the rail too.
+    val wideLayout = LocalConfiguration.current.screenWidthDp >= 600
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -151,8 +165,9 @@ fun HidAndSeekApp(
         },
     ) {
         Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            LargeFlexibleTopAppBar(
                 title = {
                     Text(
                         when {
@@ -162,6 +177,19 @@ fun HidAndSeekApp(
                         },
                     )
                 },
+                subtitle = {
+                    if (!inSettings) {
+                        Text(
+                            when (transportState) {
+                                TransportState.CONNECTED -> "Connected to a device"
+                                TransportState.CONNECTING -> "Connecting…"
+                                TransportState.REGISTERED -> "Ready to pair"
+                                else -> "No device connected"
+                            },
+                        )
+                    }
+                },
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     when {
                         inSettings -> IconButton(onClick = { navController.popBackStack() }) {
@@ -198,7 +226,8 @@ fun HidAndSeekApp(
         },
         bottomBar = {
             // Settings is a full-screen destination and never appears as a tab.
-            if (!inSettings) {
+            // On wide screens the destinations move to a side rail instead.
+            if (!inSettings && !wideLayout) {
                 NavigationBar {
                     NavigationBarItem(
                         selected = route == ROUTE_TYPE,
@@ -216,11 +245,15 @@ fun HidAndSeekApp(
             }
         },
     ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = ROUTE_TYPE,
-            modifier = Modifier.padding(padding),
-        ) {
+        Row(Modifier.padding(padding)) {
+            if (!inSettings && wideLayout) {
+                NavigationRailForWideScreens(route) { navController.navigateToTab(it) }
+            }
+
+            NavHost(
+                navController = navController,
+                startDestination = ROUTE_TYPE,
+            ) {
             composable(ROUTE_TYPE) { TypeScreen(typeViewModel) }
             composable(ROUTE_CHAT) {
                 ChatScreen(
@@ -286,6 +319,7 @@ fun HidAndSeekApp(
             composable(SettingsRoutes.ABOUT) { AboutScreen() }
             }
         }
+        }
     }
 
     if (showDevicePicker) {
@@ -306,6 +340,7 @@ fun HidAndSeekApp(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ConnectionChip(state: TransportState, onClick: () -> Unit) {
     val label = when (state) {
@@ -317,8 +352,43 @@ private fun ConnectionChip(state: TransportState, onClick: () -> Unit) {
     AssistChip(
         onClick = onClick,
         label = { Text(label) },
+        leadingIcon = if (state == TransportState.CONNECTING) {
+            { LoadingIndicator(Modifier.size(18.dp)) }
+        } else {
+            null
+        },
         modifier = Modifier.padding(end = 4.dp),
     )
+}
+
+/**
+ * Bottom bar on phones, side rail on anything wider.
+ *
+ * A bottom bar on a tablet wastes the height that the staging area actually
+ * wants, and puts the destinations a long way from where the hands are.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun NavigationRailForWideScreens(
+    route: String?,
+    onNavigate: (String) -> Unit,
+) {
+    WideNavigationRail {
+        WideNavigationRailItem(
+            railExpanded = false,
+            selected = route == ROUTE_TYPE,
+            onClick = { onNavigate(ROUTE_TYPE) },
+            icon = { Icon(Icons.Default.Keyboard, contentDescription = null) },
+            label = { Text("Type") },
+        )
+        WideNavigationRailItem(
+            railExpanded = false,
+            selected = route == ROUTE_CHAT,
+            onClick = { onNavigate(ROUTE_CHAT) },
+            icon = { Icon(Icons.Outlined.Chat, contentDescription = null) },
+            label = { Text("Chat") },
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
