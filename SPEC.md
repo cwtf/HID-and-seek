@@ -67,11 +67,11 @@ machines" case (§5.3.4).
 | Item | Value |
 |---|---|
 | Language | Kotlin 2.4.10 |
-| Build | AGP 9.3.1, Gradle 9.5 (AGP 9 provides Kotlin support built in — no `kotlin-android` plugin) |
-| UI | Jetpack Compose, Material 3 **Expressive** — `androidx.compose.material3` **1.5.0-alpha** (see note) |
+| Build | AGP 9.0.0, Gradle 9.5 (AGP 9 provides Kotlin support built in — no `kotlin-android` plugin) |
+| UI | Jetpack Compose, Material 3 **Expressive** — `androidx.compose.material3` **1.5.0-alpha18** (see note) |
 | **Min SDK** | **31 (Android 12)** — see §2.1 |
 | Target SDK | 36 (Android 16) |
-| Compile SDK | 37 — required by the material3 alpha; does not change runtime behaviour |
+| Compile SDK | 36 |
 | Application ID | `dev.cwtf.hidandseek` — see §2.2 |
 | Architecture | Single Activity, MVVM + unidirectional data flow, Kotlin Flows |
 | DI | Hilt |
@@ -83,14 +83,22 @@ machines" case (§5.3.4).
 
 Form factors: phone (primary), tablet/foldable (adaptive layouts, §4.7).
 
-> **Material 3 Expressive is on an alpha.** `MaterialExpressiveTheme`,
-> `MotionScheme`, `ButtonGroup`, `SplitButton`, `LoadingIndicator`,
-> `FlexibleBottomAppBar`, and `WideNavigationRail` are all still `internal` in
-> material3 1.4.0, the current stable release the Compose BOM pins. They are
-> public only from 1.5.0-alpha, which in turn requires AGP 9 and compileSdk 37.
-> The expressive design system is a stated requirement, so material3 is pinned
-> ahead of the BOM onto `1.5.0-alpha25`. Expect API churn between alphas; pin
-> back to the BOM once 1.5.0 is stable.
+> **Material 3 Expressive is on an alpha, and the version is boxed in from both
+> sides.** `MaterialExpressiveTheme`, `MotionScheme`, `ButtonGroup`,
+> `SplitButton`, `LoadingIndicator`, `FlexibleBottomAppBar`, and
+> `WideNavigationRail` are all still `internal` in material3 1.4.0, the stable
+> release the Compose BOM pins — so the floor is the 1.5.0 alpha line.
+>
+> The ceiling is the IDE. Android Studio enforces its own maximum AGP version,
+> and the 2025.2.x (AI-252) generation refuses to sync past **AGP 9.0.0**.
+> material3 alphas from 1.5.0-alpha20 onward depend on Compose 1.12, whose AAR
+> metadata demands AGP 9.1+. **1.5.0-alpha18 is the newest alpha still on
+> Compose 1.11**, and therefore the newest that AGP 9.0.0 — and this Studio —
+> will accept.
+>
+> Note the failure is asymmetric: a newer AGP builds fine from the command line
+> and fails only in the IDE, so "it compiles" is not evidence the toolchain is
+> right. Raise AGP and material3 together, only alongside a Studio upgrade.
 
 ### 2.1 Min SDK rationale
 

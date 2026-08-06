@@ -7,10 +7,7 @@ plugins {
 
 android {
     namespace = "dev.cwtf.hidandseek"
-    // 37 is required by material3 1.5.0-alpha, which is where the Expressive
-    // APIs are public. targetSdk stays at 36 — compiling against a newer
-    // platform does not change runtime behaviour.
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.cwtf.hidandseek"
