@@ -610,6 +610,12 @@ class TypeViewModel(private val container: AppContainer) : ViewModel() {
 
     val activeAddress: String? get() = controller.activeAddress.value
 
+    val activeHostOs: HostOsTag
+        get() = activeAddress
+            ?.let(container.roster.value::find)
+            ?.hostOs
+            ?: HostOsTag.UNKNOWN
+
     fun registerAsKeyboard() {
         controller.transport.register().onFailure { status = it.message }
     }

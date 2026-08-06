@@ -276,6 +276,7 @@ fun TypeScreen(
     if (showMacros) {
         MacroSheet(
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            hostOs = viewModel.activeHostOs,
             onDismiss = { showMacros = false },
             onKey = viewModel::pressKey,
             onCombo = viewModel::pressCombo,
