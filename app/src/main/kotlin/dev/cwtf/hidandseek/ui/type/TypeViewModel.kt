@@ -6,8 +6,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.cwtf.hidandseek.AppContainer
 import dev.cwtf.hidandseek.bluetooth.HidController
 import dev.cwtf.hidandseek.bluetooth.TypeResult
+import dev.cwtf.hidandseek.data.DeviceRecord
+import dev.cwtf.hidandseek.hid.HidTarget
+import dev.cwtf.hidandseek.hid.ReconnectPolicy
 import dev.cwtf.hidandseek.hid.DrainDecision
 import dev.cwtf.hidandseek.hid.DrainPlan
 import dev.cwtf.hidandseek.hid.EditTrigger
@@ -21,7 +25,9 @@ enum class SendMode { STAGED, LIVE }
 /** Asked when switching into live mode with text already staged. */
 enum class ModeSwitchChoice { SEND_FIRST, KEEP_UNSENT, CLEAR }
 
-class TypeViewModel(private val controller: HidController) : ViewModel() {
+class TypeViewModel(private val container: AppContainer) : ViewModel() {
+
+    private val controller: HidController = container.hidController
 
     var buffer by mutableStateOf(TextFieldValue())
         private set
@@ -225,6 +231,17 @@ class TypeViewModel(private val controller: HidController) : ViewModel() {
     }
 
     private fun report(result: TypeResult) {
+        val delivered = when (result) {
+            is TypeResult.Delivered -> result.chars
+            is TypeResult.Partial -> result.charsDelivered
+            is TypeResult.Rejected -> 0
+        }
+        controller.activeAddress.value?.let { address ->
+            viewModelScope.launch {
+                container.deviceRosterRepository.addCharsSent(address, delivered)
+            }
+        }
+
         status = when (result) {
             is TypeResult.Delivered -> when {
                 result.chars == 0 -> null
@@ -244,18 +261,31 @@ class TypeViewModel(private val controller: HidController) : ViewModel() {
     fun connect(address: String, name: String) {
         viewModelScope.launch {
             controller.transport.register()
-            val result = controller.transport.connect(
-                dev.cwtf.hidandseek.hid.HidTarget(address, name),
-            )
+            val result = controller.transport.connect(HidTarget(address, name))
+
             status = result.fold(
                 onSuccess = { "Connected to $name" },
                 onFailure = { it.message },
             )
-            if (result.isSuccess) controller.drain.onReconnected(
-                policy = dev.cwtf.hidandseek.hid.ReconnectPolicy.ASK,
-                buffer = buffer.text,
-                compositionStart = buffer.composition?.start,
-            )
+
+            if (result.isSuccess) {
+                // Using a host is what puts it in the roster — there is no
+                // separate "save this device" step to forget to do.
+                container.deviceRosterRepository.recordConnection(
+                    address = address,
+                    name = name,
+                    atEpochMs = System.currentTimeMillis(),
+                )
+                // Set last: this drives per-device settings resolution, and the
+                // roster entry has to exist before it resolves against it.
+                controller.activeAddress.value = address
+
+                controller.drain.onReconnected(
+                    policy = container.settings.value.live.reconnectPolicy,
+                    buffer = buffer.text,
+                    compositionStart = buffer.composition?.start,
+                )
+            }
         }
     }
 
@@ -263,14 +293,26 @@ class TypeViewModel(private val controller: HidController) : ViewModel() {
         viewModelScope.launch {
             controller.transport.disconnect()
             controller.drain.onDisconnected()
+            controller.activeAddress.value = null
         }
     }
+
+    /** Known devices first, then anything paired that is not in the roster yet. */
+    fun pickerDevices(): List<DeviceRecord> {
+        val roster = container.roster.value
+        val known = roster.byRecency
+        val knownAddresses = known.map { it.address }.toSet()
+        val unadopted = controller.transport.bondedDevices()
+            .filterNot { it.address in knownAddresses }
+            .map { DeviceRecord(address = it.address, name = it.name) }
+        return known + unadopted
+    }
+
+    val activeAddress: String? get() = controller.activeAddress.value
 
     fun registerAsKeyboard() {
         controller.transport.register().onFailure { status = it.message }
     }
-
-    fun bondedDevices() = controller.transport.bondedDevices()
 
     val canSend: Boolean get() = transportState.value == TransportState.CONNECTED
 }

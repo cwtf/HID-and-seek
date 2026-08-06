@@ -75,7 +75,7 @@ machines" case (§5.3.4).
 | Application ID | `dev.cwtf.hidandseek` — see §2.2 |
 | Architecture | Single Activity, MVVM + unidirectional data flow, Kotlin Flows |
 | DI | Hilt |
-| Persistence | Room (chat history, device roster, snippets, audit), DataStore Proto (settings), EncryptedSharedPreferences (API keys) |
+| Persistence | DataStore + kotlinx.serialization (settings, device roster) · Room (chat history, snippets, audit — see note) · EncryptedSharedPreferences (API keys) |
 | Networking | OkHttp + SSE for streaming completions |
 | Serialization | kotlinx.serialization |
 | Async | Coroutines + Flow |
@@ -1135,13 +1135,24 @@ Version, build, licenses, source link, HID troubleshooting guide, host-pairing i
 
 ```kotlin
 // Room
-@Entity data class DeviceEntity(
-    @PrimaryKey val address: String,
+// NOTE (implemented): the device roster lives in DataStore + kotlinx.serialization,
+// not Room. It is a bounded list of a handful of records with no queries, no
+// joins, and no full-text search, so Room's value would be unused while its
+// cost (KSP codegen, migrations) would be real. Room still earns its place for
+// chat history, where message volume and FTS actually need it.
+//
+// The override fields are nullable on purpose: null means "follow the global
+// default", so changing a default moves every device that has not been given an
+// explicit answer, while a device pinned to BIOS keeps it.
+@Serializable data class DeviceRecord(
+    val address: String,
     val name: String, val nickname: String?,
-    val layoutId: String, val typingProfileId: String,
-    val hostOs: HostOs?,                 // WINDOWS, MACOS, LINUX, ANDROID, IOS, TV, OTHER
+    val layoutId: String?,               // null follows the global default
+    val profileId: String?,              // null follows the global default
+    val livePresetId: String?,           // null follows the global default
+    val hostOs: HostOsTag,               // UNKNOWN, WINDOWS, MACOS, LINUX, ANDROID, IOS, TV, OTHER
     val autoReconnect: Boolean, val isDefault: Boolean,
-    val lastConnectedAt: Instant?, val charsSent: Long,
+    val lastConnectedAtEpochMs: Long?, val charsSent: Long,
 )
 
 @Entity data class ConversationEntity(

@@ -1,6 +1,7 @@
 package dev.cwtf.hidandseek.bluetooth
 
 import android.content.Context
+import dev.cwtf.hidandseek.data.ResolvedConfig
 import dev.cwtf.hidandseek.hid.BuiltInLayouts
 import dev.cwtf.hidandseek.hid.DrainPlan
 import dev.cwtf.hidandseek.hid.KeyLayout
@@ -50,11 +51,30 @@ class HidController(context: Context) {
     private val sendLock = Mutex()
 
     var layout: KeyLayout = BuiltInLayouts.DEFAULT
+        private set
     var profile: TypingProfile = TypingProfile.DEFAULT
+        private set
     var unmappablePolicy: UnmappablePolicy = UnmappablePolicy.Skip
+        private set
 
     /** Live-typing state. The buffer lives in the UI; this tracks the host. */
     val drain = LiveDrain()
+
+    /** Address of the host in use, so per-device overrides can be resolved. */
+    val activeAddress = MutableStateFlow<String?>(null)
+
+    /**
+     * Applies resolved settings.
+     *
+     * Takes effect on the next send rather than restarting anything, so
+     * changing a slider mid-session does not interrupt live typing.
+     */
+    fun applyConfig(resolved: ResolvedConfig) {
+        layout = resolved.layout
+        profile = resolved.profile
+        unmappablePolicy = resolved.unmappablePolicy
+        drain.config = resolved.live
+    }
 
     private val _progress = MutableStateFlow<SendProgress?>(null)
     val progress = _progress.asStateFlow()
