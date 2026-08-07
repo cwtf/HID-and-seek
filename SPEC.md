@@ -386,6 +386,8 @@ tabs — never present in the bottom bar.
 #### 4.3.1 Device picker (the multi-device entry point)
 
 A modal bottom sheet, opened by tapping the connection chip from either tab.
+While it is open, the bonded-device snapshot refreshes automatically so a host
+that finishes pairing appears without closing and reopening the picker.
 
 ```
 ┌──────────────────────────────────────────┐
@@ -737,7 +739,9 @@ Fields in order: name · base URL (validated; warns on plain HTTP unless `allowI
 masked API key · **Test connection** · **model picker** (§6.1.2) · sampling sliders · system
 prompt · custom header rows · delete with confirmation.
 
-**Test connection** issues `GET {baseUrl}/models` and reports one of:
+**Test connection** saves and uses a newly pasted key, then issues
+`GET {baseUrl}/models`. On success, if no default model has been chosen, the
+first chat model returned becomes the default before the result is shown. It reports one of:
 
 | Result | Shown as |
 |---|---|

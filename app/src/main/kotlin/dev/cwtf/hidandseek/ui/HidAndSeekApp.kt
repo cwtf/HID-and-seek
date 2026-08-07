@@ -53,6 +53,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
@@ -121,6 +122,19 @@ fun HidAndSeekApp(
 
     val transportState by container.hidController.transport.state.collectAsState()
     var showDevicePicker by remember { mutableStateOf(false) }
+    var pickerDevices by remember { mutableStateOf<List<DeviceRecord>>(emptyList()) }
+
+    // Pairing is initiated by the host, so Android can add a bond while this
+    // sheet is already open. bondedDevices() is a platform snapshot rather
+    // than observable state; poll only while the picker is visible so a newly
+    // paired host appears without closing and reopening it.
+    LaunchedEffect(showDevicePicker) {
+        if (!showDevicePicker) return@LaunchedEffect
+        while (true) {
+            pickerDevices = typeViewModel.pickerDevices()
+            delay(1_000)
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -333,7 +347,7 @@ fun HidAndSeekApp(
 
     if (showDevicePicker) {
         DevicePickerSheet(
-            devices = typeViewModel.pickerDevices(),
+            devices = pickerDevices,
             activeAddress = typeViewModel.activeAddress,
             sheetState = rememberModalBottomSheetState(),
             onDismiss = { showDevicePicker = false },

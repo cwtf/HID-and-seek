@@ -92,6 +92,17 @@ data class LlmProviders(
     )
 }
 
+/** Keeps an explicit choice, otherwise picks the first discovered chat model. */
+internal fun chooseDefaultModel(
+    currentDefault: String,
+    models: List<LlmModel>,
+): String {
+    if (currentDefault.isNotBlank()) return currentDefault
+    return ModelFilter.apply(models, showAll = false).firstOrNull()?.id
+        ?: models.firstOrNull()?.id
+        ?: ""
+}
+
 /** Starting points with the base URL filled in and the key left blank. */
 data class ProviderPreset(
     val name: String,

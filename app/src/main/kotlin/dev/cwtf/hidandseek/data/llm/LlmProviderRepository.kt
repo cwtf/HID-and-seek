@@ -83,6 +83,7 @@ class LlmProviderRepository(
             val provider = current.find(providerId) ?: return@updateData current
             current.upsert(
                 provider.copy(
+                    defaultModel = chooseDefaultModel(provider.defaultModel, models),
                     models = models,
                     modelsFetchedAtEpochMs = System.currentTimeMillis(),
                 ),

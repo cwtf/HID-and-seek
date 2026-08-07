@@ -13,6 +13,7 @@ import dev.cwtf.hidandseek.data.llm.ModelFilter
 import dev.cwtf.hidandseek.data.llm.ModelsUnavailable
 import dev.cwtf.hidandseek.data.llm.ProviderPreset
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /** Result of a Test connection attempt, phrased so each has a next step. */
@@ -34,6 +35,8 @@ class LlmViewModel(private val container: AppContainer) : ViewModel() {
 
     /** Local echo of the key field; never read back from storage into the UI. */
     var apiKeyDraft by mutableStateOf("")
+
+    private val apiKeySaveJobs = mutableMapOf<String, Job>()
 
     fun provider(id: String): LlmProvider? = providers.value.find(id)
 
@@ -62,9 +65,11 @@ class LlmViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun saveApiKey(provider: LlmProvider) {
-        val key = apiKeyDraft
+        val key = apiKeyDraft.trim()
         apiKeyDraft = ""
-        viewModelScope.launch { container.llmProviderRepository.setApiKey(provider, key) }
+        apiKeySaveJobs[provider.id] = viewModelScope.launch {
+            container.llmProviderRepository.setApiKey(provider, key)
+        }
     }
 
     // --- model discovery ----------------------------------------------------
@@ -76,17 +81,39 @@ class LlmViewModel(private val container: AppContainer) : ViewModel() {
      * implement it — so it resolves to manual entry rather than a red failure.
      */
     fun testConnection(provider: LlmProvider) {
+        val pastedKey = apiKeyDraft.trim().takeIf { it.isNotEmpty() }
+        if (pastedKey != null) apiKeyDraft = ""
         connectionTest = ConnectionTest.Running
         viewModelScope.launch {
+            // Testing immediately after Save must wait for the encrypted write.
+            // If the user has only pasted a key, Test also saves and uses it in
+            // this same coroutine so there is no stale-key race.
+            apiKeySaveJobs.remove(provider.id)?.join()
+            val apiKey = try {
+                if (pastedKey != null) {
+                    container.llmProviderRepository.setApiKey(provider, pastedKey)
+                    pastedKey
+                } else {
+                    container.llmProviderRepository.apiKey(provider)
+                }
+            } catch (error: Throwable) {
+                connectionTest = ConnectionTest.Failed(
+                    error.message ?: "Could not save the API key",
+                )
+                return@launch
+            }
+
             val started = System.currentTimeMillis()
             val result = container.llmClient.fetchModels(
                 provider,
-                container.llmProviderRepository.apiKey(provider),
+                apiKey,
             )
             val elapsed = System.currentTimeMillis() - started
 
             connectionTest = result.fold(
                 onSuccess = { models ->
+                    // cacheModels also chooses the first chat-capable model
+                    // when this provider does not have a default yet.
                     container.llmProviderRepository.cacheModels(provider.id, models)
                     ConnectionTest.Ok(models.size, elapsed)
                 },

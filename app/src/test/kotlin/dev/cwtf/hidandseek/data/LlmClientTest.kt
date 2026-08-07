@@ -3,6 +3,7 @@ package dev.cwtf.hidandseek.data
 import dev.cwtf.hidandseek.data.llm.LlmClient
 import dev.cwtf.hidandseek.data.llm.LlmModel
 import dev.cwtf.hidandseek.data.llm.ModelFilter
+import dev.cwtf.hidandseek.data.llm.chooseDefaultModel
 import dev.cwtf.hidandseek.data.llm.ModelsUnavailable
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -112,6 +113,18 @@ class LlmClientTest {
 class ModelFilterTest {
 
     private fun models(vararg ids: String) = ids.map { LlmModel(id = it) }
+
+    @Test
+    fun `first discovered chat model becomes the default`() {
+        val discovered = models("text-embedding-3-small", "gpt-4o-mini", "gpt-4o")
+
+        assertEquals("gpt-4o-mini", chooseDefaultModel("", discovered))
+    }
+
+    @Test
+    fun `explicit default model is preserved after discovery`() {
+        assertEquals("manual-model", chooseDefaultModel("manual-model", models("gpt-4o")))
+    }
 
     @Test
     fun `non-chat models are filtered out by default`() {
