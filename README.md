@@ -31,7 +31,7 @@ HID & Seek is distributed as a sideloaded APK and is not available on Google Pla
 
 ### Install a packaged APK
 
-1. Download `app-release.apk` from the project's [GitHub Releases](https://github.com/cwtf/HID-and-seek/releases) page. If no release is listed, use the build-from-source instructions below.
+1. Download [`app-release.apk`](app/release/app-release.apk) from the repository's `app/release/` folder.
 2. Open the APK from your Android browser, Downloads app, or file manager.
 3. If Android asks, allow **Install unknown apps** for the app that opened the APK.
 4. Tap **Install**, then open HID & Seek and grant the requested **Nearby devices** permission.
