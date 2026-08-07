@@ -388,6 +388,8 @@ tabs — never present in the bottom bar.
 A modal bottom sheet, opened by tapping the connection chip from either tab.
 While it is open, the bonded-device snapshot refreshes automatically so a host
 that finishes pairing appears without closing and reopening the picker.
+The header also has a manual refresh action, and a connected session exposes a
+visible **Disconnect** action.
 
 ```
 ┌──────────────────────────────────────────┐
@@ -738,6 +740,9 @@ without leaving the screen.
 Fields in order: name · base URL (validated; warns on plain HTTP unless `allowInsecureHttp`) ·
 masked API key · **Test connection** · **model picker** (§6.1.2) · sampling sliders · system
 prompt · custom header rows · delete with confirmation.
+
+Configured providers can also be removed directly from the provider list, with
+confirmation; removal deletes the provider's stored API key.
 
 **Test connection** saves and uses a newly pasted key, then issues
 `GET {baseUrl}/models`. On success, if no default model has been chosen, the

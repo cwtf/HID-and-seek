@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material3.AssistChip
@@ -55,6 +57,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
@@ -355,6 +358,11 @@ fun HidAndSeekApp(
                 typeViewModel.connect(device.address, device.name)
                 showDevicePicker = false
             },
+            onRefresh = { pickerDevices = typeViewModel.pickerDevices() },
+            onDisconnect = {
+                typeViewModel.disconnect()
+                showDevicePicker = false
+            },
             onManageDevices = {
                 showDevicePicker = false
                 navController.navigate(SettingsRoutes.DEVICES)
@@ -422,15 +430,32 @@ private fun DevicePickerSheet(
     sheetState: androidx.compose.material3.SheetState,
     onDismiss: () -> Unit,
     onSelect: (DeviceRecord) -> Unit,
+    onRefresh: () -> Unit,
+    onDisconnect: () -> Unit,
     onManageDevices: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(Modifier.navigationBarsPadding()) {
-            Text(
-                "Connect to",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 12.dp, top = 4.dp),
+            ) {
+                Text(
+                    "Connect to",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onRefresh) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text("Refresh")
+                }
+            }
 
             if (devices.isEmpty()) {
                 // Pairing runs backwards from what users expect: the host has to
@@ -462,11 +487,13 @@ private fun DevicePickerSheet(
                 }
             }
 
-            TextButton(
-                onClick = onManageDevices,
+            Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
-                Text("Manage devices")
+                if (activeAddress != null) {
+                    TextButton(onClick = onDisconnect) { Text("Disconnect") }
+                }
+                TextButton(onClick = onManageDevices) { Text("Manage devices") }
             }
         }
     }

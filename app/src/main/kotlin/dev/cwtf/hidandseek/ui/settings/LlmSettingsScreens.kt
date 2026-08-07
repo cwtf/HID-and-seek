@@ -13,11 +13,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -35,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.cwtf.hidandseek.data.llm.LlmModel
+import dev.cwtf.hidandseek.data.llm.LlmProvider
 import dev.cwtf.hidandseek.data.llm.ProviderPreset
 
 @Composable
@@ -45,6 +48,7 @@ fun LlmProvidersScreen(
 ) {
     val providers by viewModel.providers.collectAsState()
     var showPresets by remember { mutableStateOf(false) }
+    var providerToRemove by remember { mutableStateOf<LlmProvider?>(null) }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         if (providers.providers.isEmpty()) {
@@ -71,6 +75,14 @@ fun LlmProvidersScreen(
                                 selected = provider.id == providers.active?.id,
                                 onClick = { viewModel.setActive(provider.id) },
                             )
+                        },
+                        trailingContent = {
+                            IconButton(onClick = { providerToRemove = provider }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Remove ${provider.name}",
+                                )
+                            }
                         },
                         modifier = Modifier.clickable { onOpenProvider(provider.id) },
                     )
@@ -114,6 +126,25 @@ fun LlmProvidersScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showPresets = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    providerToRemove?.let { provider ->
+        AlertDialog(
+            onDismissRequest = { providerToRemove = null },
+            title = { Text("Remove ${provider.name}?") },
+            text = {
+                Text("This removes the provider configuration and its stored API key.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.delete(provider.id)
+                    providerToRemove = null
+                }) { Text("Remove") }
+            },
+            dismissButton = {
+                TextButton(onClick = { providerToRemove = null }) { Text("Cancel") }
             },
         )
     }
