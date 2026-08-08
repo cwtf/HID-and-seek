@@ -1,7 +1,10 @@
 package dev.cwtf.hidandseek.ui.type
 
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -32,11 +35,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import dev.cwtf.hidandseek.data.DeviceRecord
 import dev.cwtf.hidandseek.data.HostOsTag
 import dev.cwtf.hidandseek.hid.BuiltInLayouts
 import dev.cwtf.hidandseek.hid.HidTarget
 import kotlinx.coroutines.delay
+
+private const val DISCOVERABLE_DURATION_SECONDS = 5 * 60
+private val PAIRING_PERMISSIONS = arrayOf(
+    Manifest.permission.BLUETOOTH_CONNECT,
+    Manifest.permission.BLUETOOTH_ADVERTISE,
+)
 
 /**
  * Guided pairing.
@@ -53,6 +63,7 @@ fun AddDeviceSheet(
     knownAddresses: Set<String>,
     bondedDevices: () -> List<HidTarget>,
     onDismiss: () -> Unit,
+    onPrepareForPairing: () -> Unit,
     onAdopt: (HidTarget, HostOsTag, nickname: String?, layoutId: String) -> Unit,
     onTestTyping: () -> Unit,
     testResult: String?,
@@ -65,9 +76,23 @@ fun AddDeviceSheet(
     var nickname by remember { mutableStateOf("") }
     var layoutId by remember { mutableStateOf(BuiltInLayouts.DEFAULT.id) }
 
-    val discoverable = rememberLauncherForActivityResult(
+    val discoverableLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) { step = 2 }
+    val launchDiscoverabilityPrompt = {
+        onPrepareForPairing()
+        discoverableLauncher.launch(
+            Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(
+                BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,
+                DISCOVERABLE_DURATION_SECONDS,
+            ),
+        )
+    }
+    val pairingPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        if (context.hasPairingPermissions()) launchDiscoverabilityPrompt()
+    }
 
     // While waiting, watch for a new bond appearing rather than making the user
     // hunt for a refresh button.
@@ -102,14 +127,13 @@ fun AddDeviceSheet(
                     )
                     Button(
                         onClick = {
-                            discoverable.launch(
-                                Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(
-                                    BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,
-                                    120,
-                                ),
-                            )
+                            if (context.hasPairingPermissions()) {
+                                launchDiscoverabilityPrompt()
+                            } else {
+                                pairingPermissionLauncher.launch(PAIRING_PERMISSIONS)
+                            }
                         },
-                    ) { Text("Make discoverable") }
+                    ) { Text("Make discoverable for 5 minutes") }
                     TextButton(onClick = { step = 2 }) { Text("Already paired — skip") }
                 }
 
@@ -216,6 +240,10 @@ fun AddDeviceSheet(
             }
         }
     }
+}
+
+private fun Context.hasPairingPermissions(): Boolean = PAIRING_PERMISSIONS.all { permission ->
+    ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 }
 
 private fun pairingInstructions(host: HostOsTag): String = when (host) {

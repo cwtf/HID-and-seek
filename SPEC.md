@@ -552,7 +552,7 @@ Reached from the gear icon or the picker's "Manage devices".
 the *host* initiates, since the phone is the keyboard:
 
 1. **Step 1 — Make discoverable.** The app registers the HID profile and requests discoverability,
-   showing a countdown and the name the phone advertises.
+   showing the time remaining in the five-minute window and the name the phone advertises.
 2. **Step 2 — Pair from the host.** Plain-language instructions per host OS (selectable tabs:
    Windows / macOS / Linux / Android / TV), e.g. *"On Windows: Settings → Bluetooth & devices →
    Add device → Bluetooth → pick **HID & Seek**"*. A live list shows incoming pairing requests.

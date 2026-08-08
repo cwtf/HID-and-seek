@@ -267,6 +267,7 @@ fun TypeScreen(
             knownAddresses = viewModel.knownAddresses,
             bondedDevices = viewModel::bondedDevices,
             onDismiss = { showAddDevice = false },
+            onPrepareForPairing = viewModel::registerAsKeyboard,
             onAdopt = viewModel::adoptAndConnect,
             onTestTyping = viewModel::testTyping,
             testResult = viewModel.status,
