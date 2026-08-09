@@ -389,7 +389,8 @@ A modal bottom sheet, opened by tapping the connection chip from either tab.
 While it is open, the bonded-device snapshot refreshes automatically so a host
 that finishes pairing appears without closing and reopening the picker.
 The header also has a manual refresh action, and a connected session exposes a
-visible **Disconnect** action.
+visible **Disconnect** action. A full-width **Make discoverable for 5 minutes**
+button sits below the device list so pairing can be started from this sheet.
 
 ```
 ┌──────────────────────────────────────────┐

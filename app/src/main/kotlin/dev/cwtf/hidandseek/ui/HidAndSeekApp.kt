@@ -1,6 +1,10 @@
 package dev.cwtf.hidandseek.ui
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -23,6 +27,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LargeFlexibleTopAppBar
@@ -60,7 +65,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -98,6 +105,11 @@ import dev.cwtf.hidandseek.ui.type.TypeViewModel
 
 private const val ROUTE_TYPE = "type"
 private const val ROUTE_CHAT = "chat"
+private const val DISCOVERABLE_DURATION_SECONDS = 5 * 60
+private val PAIRING_PERMISSIONS = arrayOf(
+    Manifest.permission.BLUETOOTH_CONNECT,
+    Manifest.permission.BLUETOOTH_ADVERTISE,
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -124,6 +136,7 @@ fun HidAndSeekApp(
     )
 
     val transportState by container.hidController.transport.state.collectAsState()
+    val context = LocalContext.current
     var showDevicePicker by remember { mutableStateOf(false) }
     var pickerDevices by remember { mutableStateOf<List<DeviceRecord>>(emptyList()) }
 
@@ -145,6 +158,30 @@ fun HidAndSeekApp(
         if (granted[Manifest.permission.BLUETOOTH_CONNECT] == true) {
             typeViewModel.registerAsKeyboard()
             showDevicePicker = true
+        }
+    }
+    val discoverableLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) {}
+    val launchDiscoverabilityPrompt = {
+        typeViewModel.registerAsKeyboard()
+        discoverableLauncher.launch(
+            Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(
+                BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,
+                DISCOVERABLE_DURATION_SECONDS,
+            ),
+        )
+    }
+    val discoverabilityPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        if (context.hasPairingPermissions()) launchDiscoverabilityPrompt()
+    }
+    val makeDiscoverable = {
+        if (context.hasPairingPermissions()) {
+            launchDiscoverabilityPrompt()
+        } else {
+            discoverabilityPermissionLauncher.launch(PAIRING_PERMISSIONS)
         }
     }
 
@@ -359,6 +396,7 @@ fun HidAndSeekApp(
                 showDevicePicker = false
             },
             onRefresh = { pickerDevices = typeViewModel.pickerDevices() },
+            onMakeDiscoverable = makeDiscoverable,
             onDisconnect = {
                 typeViewModel.disconnect()
                 showDevicePicker = false
@@ -431,6 +469,7 @@ private fun DevicePickerSheet(
     onDismiss: () -> Unit,
     onSelect: (DeviceRecord) -> Unit,
     onRefresh: () -> Unit,
+    onMakeDiscoverable: () -> Unit,
     onDisconnect: () -> Unit,
     onManageDevices: () -> Unit,
 ) {
@@ -487,6 +526,15 @@ private fun DevicePickerSheet(
                 }
             }
 
+            Button(
+                onClick = onMakeDiscoverable,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                Text("Make discoverable for 5 minutes")
+            }
+
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
@@ -497,6 +545,10 @@ private fun DevicePickerSheet(
             }
         }
     }
+}
+
+private fun Context.hasPairingPermissions(): Boolean = PAIRING_PERMISSIONS.all { permission ->
+    ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 }
 
 @Composable
