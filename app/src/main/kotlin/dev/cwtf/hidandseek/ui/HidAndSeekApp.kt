@@ -496,6 +496,15 @@ private fun DevicePickerSheet(
                 }
             }
 
+            Button(
+                onClick = onMakeDiscoverable,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                Text("Make discoverable for 5 minutes")
+            }
+
             if (devices.isEmpty()) {
                 // Pairing runs backwards from what users expect: the host has to
                 // initiate, because this phone is the keyboard.
@@ -524,15 +533,6 @@ private fun DevicePickerSheet(
                         )
                     }
                 }
-            }
-
-            Button(
-                onClick = onMakeDiscoverable,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-            ) {
-                Text("Make discoverable for 5 minutes")
             }
 
             Row(
