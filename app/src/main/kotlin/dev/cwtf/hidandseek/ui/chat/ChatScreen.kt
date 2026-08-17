@@ -24,7 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -746,7 +746,7 @@ private fun Composer(
     ) {
         Box {
             IconButton(onClick = { showAttachMenu = true }) {
-                Icon(Icons.Default.AddPhotoAlternate, contentDescription = "Attach an image")
+                Icon(Icons.Default.Add, contentDescription = "Attach a file")
             }
             DropdownMenu(
                 expanded = showAttachMenu,
